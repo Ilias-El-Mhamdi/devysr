@@ -1,4 +1,4 @@
-import puppeteer, { type Browser } from 'puppeteer-core';
+import puppeteer, { type Browser, type Cookie } from 'puppeteer-core';
 import { config } from '../../config';
 
 export const CHROME_CONNECTION_ERROR =
@@ -12,10 +12,10 @@ async function connect(): Promise<Browser> {
   }
 }
 
-// Lit le cookie de session Salesforce (`sid`) directement depuis le profil du Chrome dédié, sans
-// naviguer ni piloter de login — le cookie est déjà là si l'utilisateur s'est loggé une fois dans
-// cette fenêtre (cf. features/exportLeads.md § Récupération des données).
-export async function getSalesforceSessionCookie(): Promise<string | null> {
+// Lit les cookies Salesforce directement depuis le profil du Chrome dédié, sans naviguer ni
+// piloter de login — les cookies sont déjà là si l'utilisateur s'est loggé une fois dans cette
+// fenêtre (cf. features/exportLeads.md § Récupération des données).
+async function getSalesforceCookies(): Promise<Cookie[]> {
   const browser = await connect();
   let createdPage = false;
   try {
@@ -26,12 +26,19 @@ export async function getSalesforceSessionCookie(): Promise<string | null> {
       createdPage = true;
     }
     const cookies = await page.cookies(`https://${config.salesforce.instanceHost}`);
-    const sid = cookies.find((cookie) => cookie.name === 'sid');
     if (createdPage) {
       await page.close();
     }
-    return sid ? `${sid.name}=${sid.value}` : null;
+    return cookies;
   } finally {
     await browser.disconnect();
   }
+}
+
+// Le sid seul suffit pour l'authentification Bearer sur l'API REST (cf. sessionCheck.ts et
+// reportDescribe.ts) — pas besoin du reste du cookie jar, l'API REST n'est pas la session UI.
+export async function getSalesforceSessionCookie(): Promise<string | null> {
+  const cookies = await getSalesforceCookies();
+  const sid = cookies.find((cookie) => cookie.name === 'sid');
+  return sid ? `${sid.name}=${sid.value}` : null;
 }
