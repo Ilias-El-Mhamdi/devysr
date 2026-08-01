@@ -1,7 +1,7 @@
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
-import type { ExportRunInput, Run, RunResume, RunType } from 'shared/types/run';
+import type { AnyRun, RunType } from 'shared/types/run';
 
 const RUNS_DIR = path.resolve(__dirname, '../../../data/runs');
 
@@ -13,17 +13,17 @@ function runJsonPath(runId: string): string {
   return path.join(runDir(runId), 'run.json');
 }
 
-async function writeRun(run: Run): Promise<void> {
+async function writeRun(run: AnyRun): Promise<void> {
   await fs.writeFile(runJsonPath(run.id), JSON.stringify(run, null, 2), 'utf-8');
 }
 
-export async function createRun(type: RunType, input: ExportRunInput): Promise<Run> {
+export async function createRun<T extends AnyRun>(type: T['type'], input: T['input'], emptyOutput: T['output']): Promise<T> {
   const id = randomUUID();
   await fs.mkdir(path.join(runDir(id), 'input'), { recursive: true });
   await fs.mkdir(path.join(runDir(id), 'output'), { recursive: true });
   await fs.writeFile(path.join(runDir(id), 'input', 'request.json'), JSON.stringify(input, null, 2), 'utf-8');
 
-  const run: Run = {
+  const run = {
     id,
     type,
     statut: 'en_cours',
@@ -31,49 +31,49 @@ export async function createRun(type: RunType, input: ExportRunInput): Promise<R
     dateFin: null,
     resume: null,
     input,
-    output: { fichier: null },
+    output: emptyOutput,
     erreur: null,
-  };
+  } as T;
   await writeRun(run);
   return run;
 }
 
-export async function completeRun(runId: string, resume: RunResume, fichier: string): Promise<Run> {
-  const run = await getRun(runId);
+export async function completeRun<T extends AnyRun>(runId: string, resume: T['resume'], output: T['output']): Promise<T> {
+  const run = await getRun<T>(runId);
   if (!run) {
     throw new Error(`Run introuvable: ${runId}`);
   }
-  const updated: Run = { ...run, statut: 'succes', dateFin: new Date().toISOString(), resume, output: { fichier } };
+  const updated = { ...run, statut: 'succes', dateFin: new Date().toISOString(), resume, output } as T;
   await writeRun(updated);
   return updated;
 }
 
-export async function failRun(runId: string, erreur: string): Promise<Run> {
-  const run = await getRun(runId);
+export async function failRun<T extends AnyRun>(runId: string, erreur: string): Promise<T> {
+  const run = await getRun<T>(runId);
   if (!run) {
     throw new Error(`Run introuvable: ${runId}`);
   }
-  const updated: Run = { ...run, statut: 'echec', dateFin: new Date().toISOString(), erreur };
+  const updated = { ...run, statut: 'echec', dateFin: new Date().toISOString(), erreur } as T;
   await writeRun(updated);
   return updated;
 }
 
-export async function getRun(runId: string): Promise<Run | null> {
+export async function getRun<T extends AnyRun = AnyRun>(runId: string): Promise<T | null> {
   try {
     const raw = await fs.readFile(runJsonPath(runId), 'utf-8');
-    return JSON.parse(raw) as Run;
+    return JSON.parse(raw) as T;
   } catch {
     return null;
   }
 }
 
-export async function listRuns(type: RunType): Promise<Run[]> {
+export async function listRuns<T extends AnyRun = AnyRun>(type: RunType): Promise<T[]> {
   await fs.mkdir(RUNS_DIR, { recursive: true });
   const entries = await fs.readdir(RUNS_DIR, { withFileTypes: true });
-  const runs: Run[] = [];
+  const runs: T[] = [];
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
-    const run = await getRun(entry.name);
+    const run = await getRun<T>(entry.name);
     if (run && run.type === type) {
       runs.push(run);
     }
@@ -92,4 +92,8 @@ export async function deleteRun(runId: string): Promise<void> {
 
 export function outputFilePath(runId: string, fichier: string): string {
   return path.join(runDir(runId), 'output', fichier);
+}
+
+export async function readRunOutputFile(runId: string, fichier: string): Promise<string> {
+  return fs.readFile(outputFilePath(runId, fichier), 'utf-8');
 }

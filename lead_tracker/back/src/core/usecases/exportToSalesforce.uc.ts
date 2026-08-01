@@ -1,4 +1,4 @@
-import type { ExportRunInput, Run, RunResume, RunType } from 'shared/types/run';
+import type { ExportRun, ExportRunInput, ExportRunOutput, ExportRunResume, RunType } from 'shared/types/run';
 
 export class ExportAlreadyInProgressError extends Error {
   constructor() {
@@ -10,9 +10,9 @@ export interface ExportToSalesforceDeps {
   reportId: string;
   reportUrl: string;
   hasRunInProgress: (type: RunType) => Promise<boolean>;
-  createRun: (type: RunType, input: ExportRunInput) => Promise<Run>;
-  completeRun: (runId: string, resume: RunResume, fichier: string) => Promise<Run>;
-  failRun: (runId: string, erreur: string) => Promise<Run>;
+  createRun: (type: 'export', input: ExportRunInput, emptyOutput: ExportRunOutput) => Promise<ExportRun>;
+  completeRun: (runId: string, resume: ExportRunResume, output: ExportRunOutput) => Promise<ExportRun>;
+  failRun: (runId: string, erreur: string) => Promise<ExportRun>;
   outputFilePath: (runId: string, fichier: string) => string;
   runExportJob: (outputPath: string) => Promise<{ nbLead: number; tailleFichierOctets: number }>;
   logActivity: (activity: { nomActivite: string; nbLead?: number; date: string }) => Promise<void>;
@@ -27,13 +27,13 @@ export function createExportToSalesforceUseCase(deps: ExportToSalesforceDeps) {
       throw new ExportAlreadyInProgressError();
     }
 
-    const run = await deps.createRun('export', { reportId: deps.reportId, reportUrl: deps.reportUrl });
+    const run = await deps.createRun('export', { reportId: deps.reportId, reportUrl: deps.reportUrl }, { fichier: null });
 
     void (async () => {
       try {
         const outputPath = deps.outputFilePath(run.id, 'export.csv');
         const { nbLead, tailleFichierOctets } = await deps.runExportJob(outputPath);
-        await deps.completeRun(run.id, { nbLead, tailleFichierOctets }, 'export.csv');
+        await deps.completeRun(run.id, { nbLead, tailleFichierOctets }, { fichier: 'export.csv' });
         await deps.logActivity({ nomActivite: 'export', nbLead, date: new Date().toISOString() });
       } catch (error) {
         await deps.failRun(run.id, error instanceof Error ? error.message : 'Erreur inconnue');
