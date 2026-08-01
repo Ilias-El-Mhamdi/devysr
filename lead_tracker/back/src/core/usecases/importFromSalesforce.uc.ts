@@ -7,6 +7,23 @@ import { assignerDistributeur } from '../domain/distributeur/distributeurAssignm
 
 const SALESFORCE_SESSION_EXPIRED_ERROR = "Session Salesforce expirée. Ouvre Chrome et reconnecte-toi à Salesforce avant de relancer l'import.";
 const LEAD_ID_HEADER = 'Lead ID';
+const LEAD_ENTITY_PREFIX = 'Lead.';
+
+// Champs Lead "système" (audit, intégration, drapeaux gérés par Salesforce) : jamais éditables
+// même s'ils sont directement sur Lead, contrairement aux champs "métier" (Status, Description,
+// Email, Phone, Rating...) — cf. features/importDistributeurs.md § Lecture seule vs éditable.
+const READ_ONLY_LEAD_API_NAMES = new Set([
+  'Id',
+  'CreatedDate',
+  'LastModifiedDate',
+  'LastActivityDate',
+  'IsConverted',
+  'IsUnreadByOwner',
+  'Jigsaw',
+  'CleanStatus',
+  'EmailBouncedReason',
+  'EmailBouncedDate',
+]);
 
 export class ImportAlreadyInProgressError extends Error {
   constructor() {
@@ -28,10 +45,28 @@ interface ChampChange {
 
 interface LeadFieldMetaLike {
   name: string;
-  label: string;
-  type: string;
   nillable: boolean;
+}
+
+interface ReportDescribeLike {
+  reportMetadata: { detailColumns: string[] };
+  reportExtendedMetadata: {
+    detailColumnInfo: Record<
+      string,
+      {
+        label: string;
+        dataType?: string;
+        entityColumnName?: string;
+        filterValues?: { apiName: string; label: string }[];
+      }
+    >;
+  };
+}
+
+interface ColumnRuleLike {
   picklistValues: string[];
+  required: boolean;
+  editable: boolean;
 }
 
 interface LeadForWorkbook {
@@ -52,12 +87,13 @@ export interface ImportFromSalesforceDeps {
   saveDistributeur: (distributeur: Distributeur) => Promise<void>;
   getSalesforceSessionCookie: () => Promise<string | null>;
   toBearerToken: (cookie: string) => string;
+  fetchReportDescribe: (bearerToken: string) => Promise<ReportDescribeLike>;
   fetchLeadFieldsMeta: (bearerToken: string) => Promise<LeadFieldMetaLike[]>;
   appendLeadsToDistributorWorkbook: (
     distributeurNom: string,
     headers: string[],
     leads: LeadForWorkbook[],
-    fieldsMeta: LeadFieldMetaLike[],
+    columnRules: Record<string, ColumnRuleLike>,
   ) => Promise<void>;
   logActivity: (activite: { nomActivite: string; nbLead?: number; nbDistributeur?: number; date: string }) => Promise<void>;
 }
@@ -89,6 +125,41 @@ function extractCreationDateMs(valeurs: Record<string, string>): number {
   return Number.isNaN(ms) ? 0 : ms;
 }
 
+// Une colonne est éditable par le distributeur si elle correspond à un champ "métier" directement
+// sur Lead (pas un champ système comme CreatedDate/Id/CleanStatus, cf. READ_ONLY_LEAD_API_NAMES) —
+// les colonnes "propriétaire" (Lead Owner, Created By, Owner Role...) pointent vers un autre objet
+// (`entityColumnName` du style "Owner.Name", "User.Alias", "UserRole.Name" — pas "Lead.xxx") et
+// restent donc automatiquement en lecture seule, sans liste à maintenir à la main.
+function isEditableColumn(entityColumnName: string | undefined): boolean {
+  if (!entityColumnName || !entityColumnName.startsWith(LEAD_ENTITY_PREFIX)) {
+    return false;
+  }
+  const apiName = entityColumnName.slice(LEAD_ENTITY_PREFIX.length);
+  return !READ_ONLY_LEAD_API_NAMES.has(apiName);
+}
+
+// Construit, pour chaque en-tête du report, les règles Excel (dropdown, obligatoire, éditable) à
+// partir du describe du report lui-même (`entityColumnName`, ex. "Lead.Status" → champ réel
+// "Status", et `filterValues` → valeurs du picklist) plutôt que de matcher par label sur le
+// describe de Lead — les en-têtes du report peuvent être renommés par son auteur (ex. "Company /
+// Account" pour le champ "Company") et un matching par label peut rater silencieusement une
+// colonne. `entityColumnName` donne le champ réel, fiable, indépendamment du renommage.
+function buildColumnRules(describe: ReportDescribeLike, requiredApiNames: Set<string>): Record<string, ColumnRuleLike> {
+  const result: Record<string, ColumnRuleLike> = {};
+  for (const key of describe.reportMetadata.detailColumns) {
+    const info = describe.reportExtendedMetadata.detailColumnInfo[key];
+    if (!info) continue;
+
+    const apiName = info.entityColumnName?.startsWith(LEAD_ENTITY_PREFIX) ? info.entityColumnName.slice(LEAD_ENTITY_PREFIX.length) : null;
+    const picklistValues = info.dataType === 'picklist' ? (info.filterValues ?? []).map((value) => value.apiName) : [];
+    const required = apiName ? requiredApiNames.has(apiName) : false;
+    const editable = isEditableColumn(info.entityColumnName);
+
+    result[info.label] = { picklistValues, required, editable };
+  }
+  return result;
+}
+
 // Démarre le run et retourne son id immédiatement ; le traitement se termine en tâche de fond (cf.
 // règle CLAUDE.md sur les actions longues — lecture Excel/écriture de potentiellement 50 fichiers).
 export function createImportFromSalesforceUseCase(deps: ImportFromSalesforceDeps) {
@@ -117,7 +188,15 @@ export function createImportFromSalesforceUseCase(deps: ImportFromSalesforceDeps
         if (!cookie) {
           throw new Error(SALESFORCE_SESSION_EXPIRED_ERROR);
         }
-        const fieldsMeta = await deps.fetchLeadFieldsMeta(deps.toBearerToken(cookie));
+        const bearerToken = deps.toBearerToken(cookie);
+        const [describe, leadFields] = await Promise.all([deps.fetchReportDescribe(bearerToken), deps.fetchLeadFieldsMeta(bearerToken)]);
+        const requiredApiNames = new Set(leadFields.filter((field) => !field.nillable).map((field) => field.name));
+        const columnRules = buildColumnRules(describe, requiredApiNames);
+        const champsEditables = new Set(
+          Object.entries(columnRules)
+            .filter(([, rule]) => rule.editable)
+            .map(([header]) => header),
+        );
 
         const leadsExistants = await deps.getAllLeads();
         const distributeurs = { ...(await deps.getAllDistributeurs()) };
@@ -133,7 +212,7 @@ export function createImportFromSalesforceUseCase(deps: ImportFromSalesforceDeps
           if (!id) continue;
 
           const existant = leadsExistants[id];
-          const hash = hashLeadValues(valeurs);
+          const hash = hashLeadValues(valeurs, champsEditables);
           const estNouveau = !existant;
           const changements = diffValeurs(existant?.valeurs, valeurs);
           const maintenant = new Date().toISOString();
@@ -174,7 +253,7 @@ export function createImportFromSalesforceUseCase(deps: ImportFromSalesforceDeps
 
         for (const [distributeurNom, leadsAAjouter] of nouveauxLeadsParDistributeur) {
           const tries = [...leadsAAjouter].sort((a, b) => extractCreationDateMs(a.valeurs) - extractCreationDateMs(b.valeurs));
-          await deps.appendLeadsToDistributorWorkbook(distributeurNom, headers, tries, fieldsMeta);
+          await deps.appendLeadsToDistributorWorkbook(distributeurNom, headers, tries, columnRules);
         }
 
         const resume: ImportRunResume = {

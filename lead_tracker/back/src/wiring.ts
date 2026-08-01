@@ -16,6 +16,7 @@ import { getSalesforceSessionCookie } from './infra/salesforce/puppeteerSession'
 import { pingSalesforceSession } from './infra/salesforce/sessionCheck';
 import { toBearerToken } from './infra/salesforce/sidToken';
 import { fetchLeadFieldsMeta } from './infra/salesforce/leadFieldMeta';
+import { fetchReportDescribe } from './infra/salesforce/reportDescribe';
 import { appendLeadsToDistributorWorkbook } from './infra/excel/distributorWorkbook';
 import { config } from './config';
 
@@ -48,6 +49,7 @@ export function buildApp(): Express {
     saveDistributeur,
     getSalesforceSessionCookie,
     toBearerToken,
+    fetchReportDescribe,
     fetchLeadFieldsMeta,
     appendLeadsToDistributorWorkbook,
     logActivity,

@@ -4,13 +4,14 @@ import { createHash } from 'node:crypto';
 // ambiguïté de concaténation (ex. {A:"1",B:""} vs {A:"1B"}).
 const FIELD_SEPARATOR = String.fromCharCode(1);
 
-// Calcul pur (aucune I/O) : le hash sert à détecter si un distributeur a modifié une valeur venant
-// de Salesforce dans son Excel. Il couvre TOUTES les colonnes du report — aucune n'est encore
-// "libre" pour le distributeur (pas de colonne de commentaire/statut dédiée pour l'instant, cf.
-// features/importDistributeurs.md). Le jour où une colonne devient éditable par le distributeur,
-// elle devra être explicitement exclue ici.
-export function hashLeadValues(valeurs: Record<string, string>): string {
+// Calcul pur (aucune I/O) : le hash sert à détecter si un distributeur a modifié une valeur
+// Salesforce dans son Excel *en dehors* des colonnes qu'il a le droit d'éditer (cf.
+// features/importDistributeurs.md § Lecture seule vs éditable). `champsExclus` = les colonnes
+// éditables par le distributeur (Email, Phone, Description, Lead Status, etc.) : les modifier est
+// normal, pas une anomalie à détecter, donc elles ne rentrent jamais dans le hash.
+export function hashLeadValues(valeurs: Record<string, string>, champsExclus: ReadonlySet<string> = new Set()): string {
   const serialized = Object.keys(valeurs)
+    .filter((key) => !champsExclus.has(key))
     .sort()
     .map((key) => `${key}=${valeurs[key]}`)
     .join(FIELD_SEPARATOR);

@@ -20,7 +20,19 @@ export interface ReportDescribe {
     reportBooleanFilter?: string;
   };
   reportExtendedMetadata: {
-    detailColumnInfo: Record<string, { label: string }>;
+    // `entityColumnName` (ex. "Lead.Status") donne le champ Salesforce réel derrière la colonne —
+    // bien plus fiable que de matcher par label (les en-têtes du report peuvent être renommés,
+    // ex. "Company / Account" pour le champ "Company"). `filterValues` donne directement les
+    // valeurs du picklist quand `dataType === 'picklist'`, sans avoir besoin du describe de Lead.
+    detailColumnInfo: Record<
+      string,
+      {
+        label: string;
+        dataType?: string;
+        entityColumnName?: string;
+        filterValues?: { apiName: string; label: string }[];
+      }
+    >;
   };
   // Catalogue de tous les champs disponibles pour ce type de report (pas seulement les colonnes
   // affichées) — labels standards Salesforce, indépendants d'un éventuel renommage des en-têtes de
