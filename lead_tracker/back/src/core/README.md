@@ -1,0 +1,1 @@
+Domaine pur (hash de lead, règles de relance, assignation distributeur…) — n'existe pas encore, apparaît au premier usecase qui en a réellement besoin. Voir [CLAUDE.md](../../../CLAUDE.md) § Backend Architecture.
