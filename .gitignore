@@ -8,3 +8,6 @@
 /dataSources.local.xml
 
 /*/.env
+
+# Données clients réelles (JSON + Excel générés) — jamais versionnées
+/lead_tracker/data/
