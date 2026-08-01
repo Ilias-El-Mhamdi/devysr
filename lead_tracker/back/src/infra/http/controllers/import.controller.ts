@@ -11,7 +11,7 @@ export function registerImportController(deps: ImportControllerDeps): Router {
   router.post('/import', (req, res) => {
     const exportRunId = (req.body as { exportRunId?: string } | undefined)?.exportRunId;
     if (!exportRunId) {
-      res.status(400).json({ message: 'exportRunId requis.' });
+      res.status(400).json({ message: 'exportRunId is required.' });
       return;
     }
 
@@ -27,7 +27,7 @@ export function registerImportController(deps: ImportControllerDeps): Router {
           res.status(400).json({ message: error.message });
           return;
         }
-        res.status(500).json({ message: error instanceof Error ? error.message : 'Erreur inconnue' });
+        res.status(500).json({ message: error instanceof Error ? error.message : 'Unknown error' });
       });
   });
 

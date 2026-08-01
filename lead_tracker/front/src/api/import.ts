@@ -5,7 +5,7 @@ import { readErrorMessage } from './runs';
 async function fetchImportRuns(): Promise<ImportRun[]> {
   const res = await fetch('/api/runs?type=import');
   if (!res.ok) {
-    throw new Error(await readErrorMessage(res, `Chargement des imports échoué: ${res.status}`));
+    throw new Error(await readErrorMessage(res, `Failed to load imports: ${res.status}`));
   }
   return (await res.json()) as ImportRun[];
 }
@@ -25,7 +25,7 @@ async function startImport(exportRunId: string): Promise<{ runId: string }> {
     body: JSON.stringify({ exportRunId }),
   });
   if (!res.ok) {
-    throw new Error(await readErrorMessage(res, `Lancement de l'import échoué: ${res.status}`));
+    throw new Error(await readErrorMessage(res, `Failed to start import: ${res.status}`));
   }
   return (await res.json()) as { runId: string };
 }

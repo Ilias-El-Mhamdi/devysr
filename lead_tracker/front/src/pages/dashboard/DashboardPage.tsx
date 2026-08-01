@@ -8,12 +8,12 @@ import { ConfirmModal } from '../../components/ConfirmModal';
 import { toast } from '../../lib/toast';
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'medium' });
+  return new Date(iso).toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'medium' });
 }
 
 function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} o`;
-  return `${(bytes / 1024).toFixed(1)} Ko`;
+  if (bytes < 1024) return `${bytes} B`;
+  return `${(bytes / 1024).toFixed(1)} KB`;
 }
 
 function statutBadgeClasses(statut: RunStatut): string {
@@ -30,11 +30,11 @@ function statutBadgeClasses(statut: RunStatut): string {
 function statutLabel(statut: RunStatut): string {
   switch (statut) {
     case 'succes':
-      return 'Succès';
+      return 'Success';
     case 'echec':
-      return 'Échec';
+      return 'Failed';
     case 'en_cours':
-      return 'En cours';
+      return 'In progress';
   }
 }
 
@@ -66,13 +66,13 @@ export function DashboardPage() {
 
   const handleStartExport = () => {
     startExport.mutate(nouveauxUniquement, {
-      onError: (error) => toast.error(error instanceof Error ? error.message : "Lancement de l'export échoué."),
+      onError: (error) => toast.error(error instanceof Error ? error.message : 'Export failed to start.'),
     });
   };
 
   const handleStartImport = (exportRunId: string) => {
     startImport.mutate(exportRunId, {
-      onError: (error) => toast.error(error instanceof Error ? error.message : "Lancement de l'import échoué."),
+      onError: (error) => toast.error(error instanceof Error ? error.message : 'Import failed to start.'),
     });
   };
 
@@ -81,7 +81,7 @@ export function DashboardPage() {
     const mutation = runToDelete.kind === 'export' ? deleteExportRun : deleteImportRun;
     mutation.mutate(runToDelete.id, {
       onSuccess: () => setRunToDelete(null),
-      onError: (error) => toast.error(error instanceof Error ? error.message : 'Suppression échouée.'),
+      onError: (error) => toast.error(error instanceof Error ? error.message : 'Deletion failed.'),
     });
   };
 
@@ -90,8 +90,8 @@ export function DashboardPage() {
       <header className="glass-panel glow-cyan rounded-2xl px-8 py-6">
         <p className="font-mono-display text-xs tracking-[0.3em] text-neon-cyan uppercase">lead_tracker</p>
         <h1 className="mt-2 text-2xl font-semibold text-slate-100">Dashboard</h1>
-        {isPending && <p className="mt-2 text-sm text-slate-500">Connexion au back…</p>}
-        {isError && <p className="mt-2 text-sm text-neon-red">Le back ne répond pas.</p>}
+        {isPending && <p className="mt-2 text-sm text-slate-500">Connecting to the backend…</p>}
+        {isError && <p className="mt-2 text-sm text-neon-red">The backend isn't responding.</p>}
         {data && <p className="mt-2 text-sm text-slate-400">{data.message}</p>}
       </header>
 
@@ -105,7 +105,7 @@ export function DashboardPage() {
               disabled={hasExportInProgress || startExport.isPending}
               className="cursor-pointer rounded-md bg-neon-violet/90 px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-neon-violet disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {hasExportInProgress ? 'Export en cours…' : 'Lancer un export'}
+              {hasExportInProgress ? 'Export in progress…' : 'Start export'}
             </button>
             <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-400">
               <input
@@ -120,8 +120,8 @@ export function DashboardPage() {
         </div>
 
         <div className="mt-6 flex flex-col gap-3">
-          {isExportRunsPending && <p className="text-sm text-slate-500">Chargement des exports…</p>}
-          {!isExportRunsPending && exportRuns?.length === 0 && <p className="text-sm text-slate-500">Aucun export pour l’instant.</p>}
+          {isExportRunsPending && <p className="text-sm text-slate-500">Loading exports…</p>}
+          {!isExportRunsPending && exportRuns?.length === 0 && <p className="text-sm text-slate-500">No exports yet.</p>}
 
           {exportRuns?.map((run) => (
             <div key={run.id} className="rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-3">
@@ -135,7 +135,7 @@ export function DashboardPage() {
                   </div>
                   {run.resume && (
                     <p className="mt-1 text-sm text-slate-300">
-                      {run.resume.nbLead} leads exportés · {formatSize(run.resume.tailleFichierOctets)}
+                      {run.resume.nbLead} leads exported · {formatSize(run.resume.tailleFichierOctets)}
                     </p>
                   )}
                   {run.erreur && <p className="mt-1 text-sm text-neon-red">{run.erreur}</p>}
@@ -148,7 +148,7 @@ export function DashboardPage() {
                         href={runDownloadUrl(run.id)}
                         className="rounded-md border border-neon-cyan/40 px-3 py-1.5 text-xs font-medium text-neon-cyan hover:bg-neon-cyan/10"
                       >
-                        Télécharger
+                        Download
                       </a>
                       <button
                         type="button"
@@ -156,7 +156,7 @@ export function DashboardPage() {
                         disabled={hasImportInProgress || startImport.isPending}
                         className="cursor-pointer rounded-md border border-neon-green/40 px-3 py-1.5 text-xs font-medium text-neon-green hover:bg-neon-green/10 disabled:cursor-not-allowed disabled:opacity-40"
                       >
-                        Importer
+                        Import
                       </button>
                     </>
                   )}
@@ -166,7 +166,7 @@ export function DashboardPage() {
                       onClick={() => setRunToDelete({ id: run.id, kind: 'export' })}
                       className="cursor-pointer rounded-md border border-slate-700 px-3 py-1.5 text-xs text-slate-400 hover:border-neon-red hover:text-neon-red"
                     >
-                      Supprimer
+                      Delete
                     </button>
                   )}
                 </div>
@@ -180,8 +180,8 @@ export function DashboardPage() {
         <h2 className="text-lg font-semibold text-slate-100">Imports</h2>
 
         <div className="mt-6 flex flex-col gap-3">
-          {isImportRunsPending && <p className="text-sm text-slate-500">Chargement des imports…</p>}
-          {!isImportRunsPending && importRuns?.length === 0 && <p className="text-sm text-slate-500">Aucun import pour l’instant.</p>}
+          {isImportRunsPending && <p className="text-sm text-slate-500">Loading imports…</p>}
+          {!isImportRunsPending && importRuns?.length === 0 && <p className="text-sm text-slate-500">No imports yet.</p>}
 
           {importRuns?.map((run) => (
             <div key={run.id} className="rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-3">
@@ -190,9 +190,9 @@ export function DashboardPage() {
                   <RunBadge statut={run.statut} dateDebut={run.dateDebut} />
                   {run.resume && (
                     <p className="mt-1 text-sm text-slate-300">
-                      {run.resume.nbLeadTraites} leads traités · {run.resume.nbLeadNouveaux} nouveaux · {run.resume.nbLeadMisAJour} mis à jour ·{' '}
-                      {run.resume.nbDistributeurCrees} distributeur(s) créé(s)
-                      {run.resume.nbLeadNonAssignes > 0 && ` · ${run.resume.nbLeadNonAssignes} non assignés`}
+                      {run.resume.nbLeadTraites} leads processed · {run.resume.nbLeadNouveaux} new · {run.resume.nbLeadMisAJour} updated ·{' '}
+                      {run.resume.nbDistributeurCrees} distributor(s) created
+                      {run.resume.nbLeadNonAssignes > 0 && ` · ${run.resume.nbLeadNonAssignes} unassigned`}
                     </p>
                   )}
                   {run.erreur && <p className="mt-1 text-sm text-neon-red">{run.erreur}</p>}
@@ -204,7 +204,7 @@ export function DashboardPage() {
                     onClick={() => setRunToDelete({ id: run.id, kind: 'import' })}
                     className="cursor-pointer rounded-md border border-slate-700 px-3 py-1.5 text-xs whitespace-nowrap text-slate-400 hover:border-neon-red hover:text-neon-red"
                   >
-                    Supprimer
+                    Delete
                   </button>
                 )}
               </div>
@@ -215,9 +215,9 @@ export function DashboardPage() {
 
       {runToDelete && (
         <ConfirmModal
-          title={`Supprimer cet ${runToDelete.kind === 'export' ? 'export' : 'import'} ?`}
-          description="Le fichier et son historique seront définitivement supprimés."
-          confirmLabel="Supprimer"
+          title={`Delete this ${runToDelete.kind === 'export' ? 'export' : 'import'}?`}
+          description="The file and its history will be permanently deleted."
+          confirmLabel="Delete"
           isConfirming={runToDelete.kind === 'export' ? deleteExportRun.isPending : deleteImportRun.isPending}
           onConfirm={handleConfirmDelete}
           onCancel={() => setRunToDelete(null)}

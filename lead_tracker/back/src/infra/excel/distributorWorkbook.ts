@@ -196,7 +196,7 @@ export async function appendLeadsToDistributorWorkbook(
   const allSheetNames = [LEADS_SHEET, ...STATUS_SHEETS];
   const sheets = new Map(allSheetNames.map((name) => [name, workbook.getWorksheet(name)]));
   if (allSheetNames.some((name) => !sheets.get(name))) {
-    throw new Error(`Fichier Excel du distributeur "${distributeurNom}" invalide (feuilles attendues absentes).`);
+    throw new Error(`Invalid Excel file for distributor "${distributeurNom}" (expected sheets are missing).`);
   }
 
   const leadsSheet = sheets.get(LEADS_SHEET)!;

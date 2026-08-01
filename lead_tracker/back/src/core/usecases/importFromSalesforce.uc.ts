@@ -5,7 +5,7 @@ import { parseSalesforceCsv, csvRowsToLeadValues } from 'shared/parsing/salesfor
 import { hashLeadValues } from '../domain/lead/lead.hash';
 import { assignerDistributeur } from '../domain/distributeur/distributeurAssignment';
 
-const SALESFORCE_SESSION_EXPIRED_ERROR = "Session Salesforce expirée. Ouvre Chrome et reconnecte-toi à Salesforce avant de relancer l'import.";
+const SALESFORCE_SESSION_EXPIRED_ERROR = 'Salesforce session expired. Open Chrome and sign back in to Salesforce before retrying the import.';
 const LEAD_ID_HEADER = 'Lead ID';
 const LEAD_ENTITY_PREFIX = 'Lead.';
 
@@ -27,13 +27,13 @@ const READ_ONLY_LEAD_API_NAMES = new Set([
 
 export class ImportAlreadyInProgressError extends Error {
   constructor() {
-    super('Un import est déjà en cours.');
+    super('An import is already in progress.');
   }
 }
 
 export class ExportRunNotReadyError extends Error {
   constructor() {
-    super("Ce run d'export n'est pas utilisable (introuvable, en cours, ou en échec).");
+    super('This export run cannot be used (not found, still in progress, or failed).');
   }
 }
 
@@ -181,7 +181,7 @@ export function createImportFromSalesforceUseCase(deps: ImportFromSalesforceDeps
         const { headers, rows } = parseSalesforceCsv(csv);
 
         if (!headers.some((header) => header.trim().toLowerCase() === LEAD_ID_HEADER.toLowerCase())) {
-          throw new Error(`La colonne "${LEAD_ID_HEADER}" doit être présente dans le report Salesforce pour pouvoir importer les leads.`);
+          throw new Error(`The "${LEAD_ID_HEADER}" column must be present in the Salesforce report to import leads.`);
         }
 
         const cookie = await deps.getSalesforceSessionCookie();
@@ -271,7 +271,7 @@ export function createImportFromSalesforceUseCase(deps: ImportFromSalesforceDeps
           date: new Date().toISOString(),
         });
       } catch (error) {
-        await deps.failRun(run.id, error instanceof Error ? error.message : 'Erreur inconnue');
+        await deps.failRun(run.id, error instanceof Error ? error.message : 'Unknown error');
       }
     })();
 

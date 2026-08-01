@@ -16,7 +16,7 @@ export function registerSalesforceSessionController(deps: SalesforceSessionContr
         res.json(body);
       })
       .catch((error: unknown) => {
-        res.status(500).json({ message: error instanceof Error ? error.message : 'Erreur inconnue' });
+        res.status(500).json({ message: error instanceof Error ? error.message : 'Unknown error' });
       });
   });
 

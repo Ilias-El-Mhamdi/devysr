@@ -3,7 +3,7 @@ import type { ExportRun, ExportRunInput, ExportRunOutput, ExportRunResume, RunTy
 
 export class ExportAlreadyInProgressError extends Error {
   constructor() {
-    super('Un export est déjà en cours.');
+    super('An export is already in progress.');
   }
 }
 
@@ -44,7 +44,7 @@ export function createExportToSalesforceUseCase(deps: ExportToSalesforceDeps) {
         await deps.completeRun(run.id, { nbLead, tailleFichierOctets }, { fichier: 'export.csv' });
         await deps.logActivity({ nomActivite: 'export', nbLead, date: new Date().toISOString() });
       } catch (error) {
-        await deps.failRun(run.id, error instanceof Error ? error.message : 'Erreur inconnue');
+        await deps.failRun(run.id, error instanceof Error ? error.message : 'Unknown error');
       }
     })();
 

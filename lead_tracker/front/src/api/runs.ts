@@ -12,7 +12,7 @@ export async function readErrorMessage(res: Response, fallback: string): Promise
 async function deleteRun(runId: string): Promise<void> {
   const res = await fetch(`/api/runs/${runId}`, { method: 'DELETE' });
   if (!res.ok) {
-    throw new Error(await readErrorMessage(res, `Suppression échouée: ${res.status}`));
+    throw new Error(await readErrorMessage(res, `Deletion failed: ${res.status}`));
   }
 }
 

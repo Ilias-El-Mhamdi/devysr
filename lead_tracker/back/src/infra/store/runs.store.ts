@@ -41,7 +41,7 @@ export async function createRun<T extends AnyRun>(type: T['type'], input: T['inp
 export async function completeRun<T extends AnyRun>(runId: string, resume: T['resume'], output: T['output']): Promise<T> {
   const run = await getRun<T>(runId);
   if (!run) {
-    throw new Error(`Run introuvable: ${runId}`);
+    throw new Error(`Run not found: ${runId}`);
   }
   const updated = { ...run, statut: 'succes', dateFin: new Date().toISOString(), resume, output } as T;
   await writeRun(updated);
@@ -51,7 +51,7 @@ export async function completeRun<T extends AnyRun>(runId: string, resume: T['re
 export async function failRun<T extends AnyRun>(runId: string, erreur: string): Promise<T> {
   const run = await getRun<T>(runId);
   if (!run) {
-    throw new Error(`Run introuvable: ${runId}`);
+    throw new Error(`Run not found: ${runId}`);
   }
   const updated = { ...run, statut: 'echec', dateFin: new Date().toISOString(), erreur } as T;
   await writeRun(updated);

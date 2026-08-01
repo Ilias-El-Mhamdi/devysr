@@ -5,7 +5,7 @@ import { fetchReportDescribe } from './reportDescribe';
 import { fetchAllReportRows } from './reportRun';
 import { buildCsv } from './csv';
 
-export const SALESFORCE_SESSION_EXPIRED_ERROR = "Session Salesforce expirée. Ouvre Chrome et reconnecte-toi à Salesforce avant de relancer l'export.";
+export const SALESFORCE_SESSION_EXPIRED_ERROR = 'Salesforce session expired. Open Chrome and sign back in to Salesforce before retrying the export.';
 const LEAD_ID_HEADER = 'Lead ID';
 
 // Exécute le vrai report Salesforce (via reportRun.ts) plutôt que l'export CSV legacy (bloqué sur
@@ -29,7 +29,7 @@ export async function runExportJob(
   if (excludeLeadIds && excludeLeadIds.size > 0) {
     const leadIdIndex = headers.findIndex((header) => header.trim().toLowerCase() === LEAD_ID_HEADER.toLowerCase());
     if (leadIdIndex === -1) {
-      throw new Error(`La colonne "${LEAD_ID_HEADER}" doit être présente dans le report Salesforce pour filtrer les nouveaux leads.`);
+      throw new Error(`The "${LEAD_ID_HEADER}" column must be present in the Salesforce report to filter new leads.`);
     }
     filteredRows = rows.filter((row) => !excludeLeadIds.has(row[leadIdIndex]));
   }

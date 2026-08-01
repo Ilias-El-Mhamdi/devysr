@@ -7,7 +7,7 @@ interface ConfirmModalProps {
   isConfirming?: boolean;
 }
 
-export function ConfirmModal({ title, description, confirmLabel = 'Confirmer', onConfirm, onCancel, isConfirming = false }: ConfirmModalProps) {
+export function ConfirmModal({ title, description, confirmLabel = 'Confirm', onConfirm, onCancel, isConfirming = false }: ConfirmModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
       <div className="glass-panel glow-violet w-full max-w-sm rounded-xl p-6">
@@ -19,7 +19,7 @@ export function ConfirmModal({ title, description, confirmLabel = 'Confirmer', o
             onClick={onCancel}
             className="cursor-pointer rounded-md border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:border-slate-500"
           >
-            Annuler
+            Cancel
           </button>
           <button
             type="button"
@@ -27,7 +27,7 @@ export function ConfirmModal({ title, description, confirmLabel = 'Confirmer', o
             disabled={isConfirming}
             className="cursor-pointer rounded-md bg-neon-red/90 px-4 py-2 text-sm font-medium text-slate-950 hover:bg-neon-red disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {isConfirming ? 'Suppression…' : confirmLabel}
+            {isConfirming ? 'Deleting…' : confirmLabel}
           </button>
         </div>
       </div>

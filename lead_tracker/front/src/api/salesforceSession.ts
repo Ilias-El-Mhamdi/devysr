@@ -6,7 +6,7 @@ const KEEP_ALIVE_INTERVAL_MS = 10 * 60 * 1000;
 async function checkSalesforceSession(): Promise<SalesforceSessionCheckResponse> {
   const res = await fetch('/api/salesforce/session/check', { method: 'POST' });
   if (!res.ok) {
-    throw new Error(`Vérification de session échouée: ${res.status}`);
+    throw new Error(`Session check failed: ${res.status}`);
   }
   return (await res.json()) as SalesforceSessionCheckResponse;
 }

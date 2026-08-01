@@ -5,7 +5,7 @@ import { readErrorMessage } from './runs';
 async function fetchExportRuns(): Promise<ExportRun[]> {
   const res = await fetch('/api/runs?type=export');
   if (!res.ok) {
-    throw new Error(await readErrorMessage(res, `Chargement des exports échoué: ${res.status}`));
+    throw new Error(await readErrorMessage(res, `Failed to load exports: ${res.status}`));
   }
   return (await res.json()) as ExportRun[];
 }
@@ -25,7 +25,7 @@ async function startExport(nouveauxUniquement: boolean): Promise<{ runId: string
     body: JSON.stringify({ nouveauxUniquement }),
   });
   if (!res.ok) {
-    throw new Error(await readErrorMessage(res, `Lancement de l'export échoué: ${res.status}`));
+    throw new Error(await readErrorMessage(res, `Failed to start export: ${res.status}`));
   }
   return (await res.json()) as { runId: string };
 }

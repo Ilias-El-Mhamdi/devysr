@@ -52,7 +52,7 @@ export async function fetchReportDescribe(bearerToken: string): Promise<ReportDe
   const url = `https://${config.salesforce.instanceHost}/services/data/${API_VERSION}/analytics/reports/${config.salesforce.reportId}/describe`;
   const response = await fetch(url, { headers: { Authorization: `Bearer ${bearerToken}` } });
   if (!response.ok) {
-    throw new Error(`Lecture de la définition du report échouée (HTTP ${response.status}).`);
+    throw new Error(`Failed to read the report definition (HTTP ${response.status}).`);
   }
   return (await response.json()) as ReportDescribe;
 }

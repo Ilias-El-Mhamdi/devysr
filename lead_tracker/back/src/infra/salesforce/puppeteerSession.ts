@@ -2,7 +2,7 @@ import puppeteer, { type Browser, type Cookie } from 'puppeteer-core';
 import { config } from '../../config';
 
 export const CHROME_CONNECTION_ERROR =
-  "Impossible de se connecter à Chrome. Vérifie que l'outil est bien lancé (npm run start) et que la fenêtre Chrome dédiée est ouverte.";
+  'Could not connect to Chrome. Make sure the app is running (npm run start) and the dedicated Chrome window is open.';
 
 async function connect(): Promise<Browser> {
   try {

@@ -14,7 +14,7 @@ export async function fetchLeadFieldsMeta(bearerToken: string): Promise<LeadFiel
   const url = `https://${config.salesforce.instanceHost}/services/data/${API_VERSION}/sobjects/Lead/describe`;
   const response = await fetch(url, { headers: { Authorization: `Bearer ${bearerToken}` } });
   if (!response.ok) {
-    throw new Error(`Lecture de la définition de l'objet Lead échouée (HTTP ${response.status}).`);
+    throw new Error(`Failed to read the Lead object definition (HTTP ${response.status}).`);
   }
   const body = (await response.json()) as { fields: { name: string; nillable: boolean }[] };
   return body.fields.map((field) => ({ name: field.name, nillable: field.nillable }));

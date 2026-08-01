@@ -17,7 +17,7 @@ function findCreatedDateColumnKey(describe: ReportDescribe): string {
       return match.name;
     }
   }
-  throw new Error('Colonne "Created Date" introuvable sur le type de report — impossible de paginer au-delà de 2000 lignes.');
+  throw new Error('"Created Date" column not found on the report type — cannot paginate beyond 2000 rows.');
 }
 
 async function fetchLeadCreatedDateBounds(bearerToken: string): Promise<{ min: string; max: string } | null> {
@@ -26,7 +26,7 @@ async function fetchLeadCreatedDateBounds(bearerToken: string): Promise<{ min: s
     headers: { Authorization: `Bearer ${bearerToken}` },
   });
   if (!response.ok) {
-    throw new Error(`Lecture des bornes de dates échouée (HTTP ${response.status}).`);
+    throw new Error(`Failed to read date bounds (HTTP ${response.status}).`);
   }
   const body = (await response.json()) as { records: { mn: string | null; mx: string | null }[] };
   const record = body.records[0];
@@ -68,7 +68,7 @@ async function runReport(bearerToken: string, reportMetadata: ReportDescribe['re
   });
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(`Exécution du report échouée (HTTP ${response.status}): ${body.slice(0, 300)}`);
+    throw new Error(`Report execution failed (HTTP ${response.status}): ${body.slice(0, 300)}`);
   }
   return (await response.json()) as RunResponse;
 }
@@ -76,7 +76,7 @@ async function runReport(bearerToken: string, reportMetadata: ReportDescribe['re
 function extractRows(run: RunResponse): string[][] {
   const rows = run.factMap['T!T']?.rows;
   if (!rows) {
-    throw new Error('Format de report non supporté (le report doit être tabulaire, sans regroupement).');
+    throw new Error('Unsupported report format (the report must be tabular, with no grouping).');
   }
   return rows.map((row) => row.dataCells.map((cell) => cell.label));
 }
@@ -101,14 +101,14 @@ async function runChunk(
 
   if (depth >= MAX_RECURSION_DEPTH) {
     throw new Error(
-      `Trop de leads créés dans un intervalle trop court pour être paginés (plus de ${MAX_ROWS_PER_RUN} entre ${startIso} et ${endIso}).`,
+      `Too many leads created within too short an interval to paginate (more than ${MAX_ROWS_PER_RUN} between ${startIso} and ${endIso}).`,
     );
   }
 
   const midMs = (new Date(startIso).getTime() + new Date(endIso).getTime()) / 2;
   const midIso = new Date(midMs).toISOString();
   if (midIso === startIso || midIso === endIso) {
-    throw new Error(`Trop de leads créés au même instant pour être paginés (plus de ${MAX_ROWS_PER_RUN} sur un intervalle non divisible).`);
+    throw new Error(`Too many leads created at the same instant to paginate (more than ${MAX_ROWS_PER_RUN} in a non-divisible interval).`);
   }
 
   await runChunk(bearerToken, baseMetadata, createdDateColumnKey, startIso, midIso, depth + 1, collected);
