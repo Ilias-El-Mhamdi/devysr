@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { DashboardPage } from './pages/dashboard/DashboardPage';
+import { SalesforceConnectionGate } from './components/SalesforceConnectionGate';
+import { ToastViewport } from './components/ToastViewport';
 import './index.css';
 
 const queryClient = new QueryClient({
@@ -17,11 +19,14 @@ if (!rootElement) {
 createRoot(rootElement).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<DashboardPage />} />
-        </Routes>
-      </BrowserRouter>
+      <SalesforceConnectionGate>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<DashboardPage />} />
+          </Routes>
+        </BrowserRouter>
+        <ToastViewport />
+      </SalesforceConnectionGate>
     </QueryClientProvider>
   </StrictMode>,
 );

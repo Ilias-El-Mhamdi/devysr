@@ -2,7 +2,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import express from 'express';
 import { buildApp } from './wiring';
-import { openBrowser } from './infra/openBrowser';
+import { launchDedicatedChrome } from './infra/openBrowser';
 
 const PORT = Number(process.env.PORT ?? 4000);
 
@@ -24,6 +24,6 @@ if (isProdServe) {
 app.listen(PORT, () => {
   console.log(`lead_tracker back listening on http://localhost:${PORT}`);
   if (isProdServe) {
-    openBrowser(`http://localhost:${PORT}`);
+    launchDedicatedChrome(`http://localhost:${PORT}`);
   }
 });
