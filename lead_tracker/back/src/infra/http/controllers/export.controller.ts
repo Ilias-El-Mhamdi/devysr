@@ -2,15 +2,16 @@ import { Router } from 'express';
 import { ExportAlreadyInProgressError } from '../../../core/usecases/exportToSalesforce.uc';
 
 export interface ExportControllerDeps {
-  exportToSalesforce: () => Promise<string>;
+  exportToSalesforce: (options?: { nouveauxUniquement?: boolean }) => Promise<string>;
 }
 
 export function registerExportController(deps: ExportControllerDeps): Router {
   const router = Router();
 
-  router.post('/export', (_req, res) => {
+  router.post('/export', (req, res) => {
+    const nouveauxUniquement = (req.body as { nouveauxUniquement?: boolean } | undefined)?.nouveauxUniquement;
     deps
-      .exportToSalesforce()
+      .exportToSalesforce({ nouveauxUniquement })
       .then((runId) => res.status(202).json({ runId }))
       .catch((error: unknown) => {
         if (error instanceof ExportAlreadyInProgressError) {

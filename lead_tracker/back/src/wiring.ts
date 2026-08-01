@@ -32,6 +32,7 @@ export function buildApp(): Express {
     completeRun,
     failRun,
     outputFilePath,
+    getAllLeads,
     runExportJob,
     logActivity,
   });

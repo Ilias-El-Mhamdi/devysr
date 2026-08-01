@@ -18,8 +18,12 @@ export function useExportRuns() {
   });
 }
 
-async function startExport(): Promise<{ runId: string }> {
-  const res = await fetch('/api/export', { method: 'POST' });
+async function startExport(nouveauxUniquement: boolean): Promise<{ runId: string }> {
+  const res = await fetch('/api/export', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nouveauxUniquement }),
+  });
   if (!res.ok) {
     throw new Error(await readErrorMessage(res, `Lancement de l'export échoué: ${res.status}`));
   }

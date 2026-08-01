@@ -17,6 +17,7 @@ export interface Run<TInput = unknown, TOutput = unknown, TResume = unknown> {
 export interface ExportRunInput {
   reportId: string;
   reportUrl: string;
+  nouveauxUniquement: boolean;
 }
 
 export interface ExportRunOutput {

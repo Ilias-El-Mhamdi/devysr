@@ -59,12 +59,13 @@ export function DashboardPage() {
   const deleteImportRun = useDeleteRun(['import-runs']);
 
   const [runToDelete, setRunToDelete] = useState<{ id: string; kind: 'export' | 'import' } | null>(null);
+  const [nouveauxUniquement, setNouveauxUniquement] = useState(false);
 
   const hasExportInProgress = exportRuns?.some((run) => run.statut === 'en_cours') ?? false;
   const hasImportInProgress = importRuns?.some((run) => run.statut === 'en_cours') ?? false;
 
   const handleStartExport = () => {
-    startExport.mutate(undefined, {
+    startExport.mutate(nouveauxUniquement, {
       onError: (error) => toast.error(error instanceof Error ? error.message : "Lancement de l'export échoué."),
     });
   };
@@ -95,16 +96,27 @@ export function DashboardPage() {
       </header>
 
       <section className="glass-panel glow-violet mt-8 rounded-2xl px-8 py-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-4">
           <h2 className="text-lg font-semibold text-slate-100">Exports</h2>
-          <button
-            type="button"
-            onClick={handleStartExport}
-            disabled={hasExportInProgress || startExport.isPending}
-            className="cursor-pointer rounded-md bg-neon-violet/90 px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-neon-violet disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {hasExportInProgress ? 'Export en cours…' : 'Lancer un export'}
-          </button>
+          <div className="flex flex-col items-end gap-2">
+            <button
+              type="button"
+              onClick={handleStartExport}
+              disabled={hasExportInProgress || startExport.isPending}
+              className="cursor-pointer rounded-md bg-neon-violet/90 px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-neon-violet disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {hasExportInProgress ? 'Export en cours…' : 'Lancer un export'}
+            </button>
+            <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-400">
+              <input
+                type="checkbox"
+                checked={nouveauxUniquement}
+                onChange={(event) => setNouveauxUniquement(event.target.checked)}
+                className="cursor-pointer accent-neon-violet"
+              />
+              New lead only
+            </label>
+          </div>
         </div>
 
         <div className="mt-6 flex flex-col gap-3">
@@ -115,7 +127,12 @@ export function DashboardPage() {
             <div key={run.id} className="rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-3">
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <RunBadge statut={run.statut} dateDebut={run.dateDebut} />
+                  <div className="flex items-center gap-2">
+                    <RunBadge statut={run.statut} dateDebut={run.dateDebut} />
+                    {run.input.nouveauxUniquement && (
+                      <span className="rounded-full border border-neon-cyan/40 bg-neon-cyan/10 px-2 py-0.5 text-xs whitespace-nowrap text-neon-cyan">new only</span>
+                    )}
+                  </div>
                   {run.resume && (
                     <p className="mt-1 text-sm text-slate-300">
                       {run.resume.nbLead} leads exportés · {formatSize(run.resume.tailleFichierOctets)}

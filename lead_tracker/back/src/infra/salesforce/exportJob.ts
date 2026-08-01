@@ -6,11 +6,16 @@ import { fetchAllReportRows } from './reportRun';
 import { buildCsv } from './csv';
 
 export const SALESFORCE_SESSION_EXPIRED_ERROR = "Session Salesforce expirée. Ouvre Chrome et reconnecte-toi à Salesforce avant de relancer l'export.";
+const LEAD_ID_HEADER = 'Lead ID';
 
 // Exécute le vrai report Salesforce (via reportRun.ts) plutôt que l'export CSV legacy (bloqué sur
 // les orgs Lightning-only) ou une retraduction SOQL (fragile sur les colonnes cross-objet) — cf.
-// features/exportLeads.md.
-export async function runExportJob(outputPath: string): Promise<{ nbLead: number; tailleFichierOctets: number }> {
+// features/exportLeads.md. `excludeLeadIds`, s'il est fourni, retire du CSV les leads déjà connus
+// (déjà importés) — utilisé par l'option "nouveaux uniquement" au lancement de l'export.
+export async function runExportJob(
+  outputPath: string,
+  excludeLeadIds?: ReadonlySet<string>,
+): Promise<{ nbLead: number; tailleFichierOctets: number }> {
   const sidCookie = await getSalesforceSessionCookie();
   if (!sidCookie) {
     throw new Error(SALESFORCE_SESSION_EXPIRED_ERROR);
@@ -19,10 +24,20 @@ export async function runExportJob(outputPath: string): Promise<{ nbLead: number
 
   const describe = await fetchReportDescribe(bearerToken);
   const { headers, rows } = await fetchAllReportRows(bearerToken, describe);
-  const csv = buildCsv(headers, rows);
+
+  let filteredRows = rows;
+  if (excludeLeadIds && excludeLeadIds.size > 0) {
+    const leadIdIndex = headers.findIndex((header) => header.trim().toLowerCase() === LEAD_ID_HEADER.toLowerCase());
+    if (leadIdIndex === -1) {
+      throw new Error(`La colonne "${LEAD_ID_HEADER}" doit être présente dans le report Salesforce pour filtrer les nouveaux leads.`);
+    }
+    filteredRows = rows.filter((row) => !excludeLeadIds.has(row[leadIdIndex]));
+  }
+
+  const csv = buildCsv(headers, filteredRows);
 
   await fs.writeFile(outputPath, csv, 'utf-8');
   const { size } = await fs.stat(outputPath);
 
-  return { nbLead: rows.length, tailleFichierOctets: size };
+  return { nbLead: filteredRows.length, tailleFichierOctets: size };
 }
