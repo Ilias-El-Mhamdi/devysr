@@ -10,7 +10,7 @@ import {
   type ReportDescribeLike,
 } from '../domain/lead/columnRules';
 
-const SALESFORCE_SESSION_EXPIRED_ERROR = 'Salesforce session expired. Open Chrome and sign back in to Salesforce before pushing to Salesforce.';
+const SALESFORCE_SESSION_EXPIRED_ERROR = 'Salesforce session expired. Open Firefox and sign back in to Salesforce before pushing to Salesforce.';
 const LEAD_ID_HEADER = 'Lead ID';
 const SALESFORCE_ID_HEADER = 'Id';
 // Salesforce affiche les cellules vides comme "-" dans un report — cette valeur est donc reprise

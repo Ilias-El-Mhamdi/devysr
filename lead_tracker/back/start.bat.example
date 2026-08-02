@@ -17,10 +17,10 @@ REM defaut : DATA_DIR\distributeurs -- decommenter et adapter si le dossier vit 
 REM (ex. un partage reseau).
 REM set DISTRIBUTORS_DIR=\\serveur\partage\distributeurs
 
-REM --- Chrome dedie (session Salesforce) ---
-REM set CHROME_DEBUG_PORT=9222
-REM defaut : DATA_DIR\chrome-profile
-REM set CHROME_USER_DATA_DIR=C:\chemin\vers\profil-chrome
+REM --- Firefox dedie (dashboard + session Salesforce) ---
+REM set FIREFOX_DEBUG_PORT=9222
+REM defaut : DATA_DIR\firefox-profile
+REM set FIREFOX_USER_DATA_DIR=C:\chemin\vers\profil-firefox
 
 REM --- Salesforce (report utilise pour l'import/verif) ---
 REM set SALESFORCE_REPORT_ID=00Ofj00000FxuDdEAJ

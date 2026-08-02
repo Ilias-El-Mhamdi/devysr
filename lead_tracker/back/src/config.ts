@@ -10,9 +10,9 @@ export const config = {
     reportUrl:
       process.env.SALESFORCE_REPORT_URL ?? 'https://orgfarm-fec657de9c-dev-ed.develop.lightning.force.com/lightning/r/Report/00Ofj00000FxuDdEAJ/edit',
   },
-  chrome: {
-    debugPort: Number(process.env.CHROME_DEBUG_PORT ?? 9222),
-    userDataDir: process.env.CHROME_USER_DATA_DIR,
+  firefox: {
+    debugPort: Number(process.env.FIREFOX_DEBUG_PORT ?? 9222),
+    userDataDir: process.env.FIREFOX_USER_DATA_DIR,
   },
   storage: {
     // Racine du stockage local (leads.json, distributeurs.json, runs/, observability/). Par

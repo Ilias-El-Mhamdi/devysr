@@ -10,7 +10,7 @@ import {
   type ReportDescribeLike,
 } from '../domain/lead/columnRules';
 
-const SALESFORCE_SESSION_EXPIRED_ERROR = 'Salesforce session expired. Open Chrome and sign back in to Salesforce before retrying the upsync.';
+const SALESFORCE_SESSION_EXPIRED_ERROR = 'Salesforce session expired. Open Firefox and sign back in to Salesforce before retrying the upsync.';
 const LEAD_ID_HEADER = 'Lead ID';
 
 export class UpsyncAlreadyInProgressError extends Error {

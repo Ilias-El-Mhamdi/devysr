@@ -10,7 +10,7 @@ avec Puppeteer pour automatiser Salesforce côté navigateur.
 - **Front** : React + TypeScript + Vite + Tailwind + React Query + React Router
 - **Back** : Node.js + TypeScript + Express — serveur **local uniquement** (`localhost`, lancé par un script, ouvert dans le navigateur par défaut). Pas de packaging Electron pour l'instant.
 - **Stockage** : fichiers **JSON** locaux (pas de base de données) + fichiers **Excel** (un par distributeur) + CSV d'export Salesforce en entrée.
-- **Automatisation Salesforce** : Puppeteer, connecté via CDP à une session Chrome **déjà ouverte et déjà loggée** (`puppeteer.connect({ browserURL })`) — on ne pilote jamais un login/2FA, on réutilise la session en cours.
+- **Automatisation Salesforce** : Puppeteer, connecté en WebDriver BiDi à une session Firefox **déjà ouverte et déjà loggée** (`puppeteer.connect({ browserWSEndpoint, protocol: 'webDriverBiDi' })`) — on ne pilote jamais un login/2FA, on réutilise la session en cours. Ce Firefox dédié sert aussi à afficher le dashboard (un seul navigateur, cf. `infra/openBrowser.ts`) — Chrome n'est plus utilisé nulle part dans l'app (bug de rendu Chromium non résolu sur certaines machines).
 
 
 Monorepo trois packages : `front/`, `back/`, `shared/` (types + parsing purs communs aux deux côtés + une fonction `parse`).
@@ -134,7 +134,7 @@ back/src/
     excel/
       distributorWorkbook.ts      ← lecture/écriture d'un fichier Excel distributeur
     salesforce/
-      puppeteerSession.ts         ← connexion CDP à la session Chrome existante
+      puppeteerSession.ts         ← connexion WebDriver BiDi à la session Firefox existante
       exportJob.ts                ← déclenche l'export Salesforce
       dataImportWizard.ts         ← automation Data Import Wizard (création/màj de leads)
     email/
@@ -222,7 +222,7 @@ Un `runId` (dossier sous `runs/`) regroupe le contexte complet d'une exécution 
 
 ## Gestion des erreurs
 
-- **Back** : les controllers HTTP catchent au niveau du routeur Express (middleware d'erreur unique), pas de `try/catch` d'affichage dispersé. Une erreur Puppeteer (session Salesforce absente/expirée) doit produire un message actionnable ("Ouvre Chrome et connecte-toi à Salesforce avant de rafraîchir"), pas une stack trace brute.
+- **Back** : les controllers HTTP catchent au niveau du routeur Express (middleware d'erreur unique), pas de `try/catch` d'affichage dispersé. Une erreur Puppeteer (session Salesforce absente/expirée) doit produire un message actionnable ("Ouvre Firefox et connecte-toi à Salesforce avant de rafraîchir"), pas une stack trace brute.
 - **Front** : `onError` sur les mutations → toast (`lib/toast.ts` à réintroduire tel quel si utile).
 
 ---

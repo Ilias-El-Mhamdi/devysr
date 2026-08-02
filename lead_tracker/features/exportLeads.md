@@ -19,27 +19,35 @@ https://orgfarm-fec657de9c-dev-ed.develop.lightning.force.com/lightning/r/Report
 # Étape 2 : Bouton "Lancer un export" — fonctionnel
 
 Le dashboard expose une section "Exports" : un bouton déclenche côté back la récupération du
-report Salesforce ci-dessus, sans jamais piloter de login/2FA — on réutilise une session Chrome
-déjà loggée, connectée via CDP (Chrome DevTools Protocol). Le résultat est une liste de runs
-(succès/échec/en cours), avec téléchargement à la demande et suppression.
+report Salesforce ci-dessus, sans jamais piloter de login/2FA — on réutilise une session Firefox
+déjà loggée, connectée en WebDriver BiDi. Le résultat est une liste de runs (succès/échec/en
+cours), avec téléchargement à la demande et suppression.
 
-## Infra — Chrome dédié
+## Infra — Firefox dédié
 
-- Au lancement de l'app (`npm run start`), le back lance un **Chrome dédié**
-  (`back/src/infra/openBrowser.ts`) avec `--remote-debugging-port=9222`, un `--user-data-dir`
-  propre à l'outil (profil isolé du Chrome habituel de l'utilisateur), et une fenêtre en
-  1920×1080 (`--start-maximized` + `--window-size`/`--window-position`, car `--start-maximized`
-  seul est ignoré par Chromium sur macOS). Ce Chrome affiche directement le dashboard.
-- Un Chrome lancé normalement n'expose pas CDP par défaut — le flag doit être présent **au
-  lancement du process**, on ne peut pas se greffer après coup sur une instance déjà ouverte sans
-  ce flag. D'où la nécessité que ce soit l'app elle-même qui lance ce Chrome.
+- Au lancement de l'app (`npm run start`), le back lance un **Firefox dédié**
+  (`back/src/infra/openBrowser.ts`) avec `--remote-debugging-port=9222` (active le Remote Agent
+  WebDriver BiDi) et un `--profile` propre à l'outil (profil isolé du Firefox habituel de
+  l'utilisateur). Ce Firefox affiche directement le dashboard.
+- Contrairement à Chrome (`/json/version` en HTTP), Firefox n'expose aucune découverte HTTP de son
+  endpoint BiDi : il l'affiche une seule fois sur **stderr** au démarrage
+  (`WebDriver BiDi listening on ws://…`). Le back capture cette ligne au lancement et la persiste
+  dans `data/firefox-bidi-endpoint.txt` pour pouvoir s'y reconnecter (y compris après un
+  redémarrage du back sans redémarrage de Firefox).
+- Si un Firefox dédié tourne déjà (le port de debug répond), le back ne relance pas de process
+  par-dessus — évite l'accumulation d'onglets dupliqués (déjà rencontré avec l'ancien Chrome
+  dédié) et un second process sur le même profil se refuserait de toute façon à démarrer.
 - C'est dans cette même fenêtre que l'utilisateur se logge à Salesforce (bouton "Ouvrir
   Salesforce" du popup de connexion, simple `<a target="_blank">` → nouvel onglet dans ce même
   profil/process, donc même cookie jar — pas besoin de faire transiter ça par le back).
-- La session ne survit pas à une fermeture complète de Chrome / extinction du PC (cookie de
+- La session ne survit pas à une fermeture complète de Firefox / extinction du PC (cookie de
   session, pas persistant) + timeout serveur Salesforce. Reconnexion manuelle attendue à chaque
-  nouvelle session Chrome (typiquement 1x/jour) : c'est le flux normal, pas un cas d'erreur
+  nouvelle session Firefox (typiquement 1x/jour) : c'est le flux normal, pas un cas d'erreur
   exceptionnel.
+- **Chrome n'est plus utilisé nulle part dans l'app** : bug de rendu Chromium non résolu sur
+  certaines machines (fenêtre "snap back" à une taille figée après un resize/nouvel onglet,
+  reproductible même hors de l'app, absent sur Firefox) — migration complète vers Firefox plutôt
+  que de contourner le bug.
 
 ## Récupération des données — le vrai report Salesforce, exécuté via l'API Analytics
 
@@ -59,7 +67,7 @@ pas les retenter) :
 (pas de Connected App OAuth), mais en laissant **Salesforce exécuter le vrai report** — il résout
 nativement toutes les colonnes (cross-objet, renommées, etc.), pas nous.
 
-1. Lire le cookie `sid` via CDP (`infra/salesforce/puppeteerSession.ts`), le transformer en Bearer
+1. Lire le cookie `sid` via WebDriver BiDi (`infra/salesforce/puppeteerSession.ts`), le transformer en Bearer
    token (`infra/salesforce/sidToken.ts`).
 2. `GET /services/data/v61.0/analytics/reports/<reportId>/describe` (Bearer) —
    `infra/salesforce/reportDescribe.ts` — récupère :
@@ -108,7 +116,7 @@ back) :
   montée à la racine de l'app (`SalesforceConnectionGate` dans `main.tsx`) donc active dès le
   lancement, tant que l'app est ouverte.
 - Chaque tick appelle `POST /api/salesforce/session/check` (endpoint **stateless** côté back : il
-  relit le cookie via CDP + ping léger l'API REST (`GET /services/data/v61.0/limits`, Bearer sid)
+  relit le cookie via WebDriver BiDi + ping léger l'API REST (`GET /services/data/v61.0/limits`, Bearer sid)
   + retourne le statut — pas de cache/état en mémoire côté back, pas de setInterval côté back).
 - Popup bloquant global (`SalesforceConnectionGate`) tant que `status !== 'connecte'` :
   - bouton **"Ouvrir Salesforce"** → `<a target="_blank">` vers l'URL du report (redirige vers le
@@ -116,7 +124,7 @@ back) :
   - bouton **"Vérifier"** → `refetch()` sur la même query (réinitialise aussi le timer des 10 min) :
     - succès (`connecte`) → toast succès, popup se ferme
     - requête OK mais toujours `deconnecte` → toast erreur, popup reste affiché
-    - requête en échec (back/CDP injoignable) → toast erreur distinct, popup reste affiché
+    - requête en échec (back/Firefox injoignable) → toast erreur distinct, popup reste affiché
 
 ## Stockage — un dossier par run d'export
 
@@ -161,16 +169,16 @@ de `fs` directement ailleurs).
 
 ```
 back/src/
-  config.ts                    ← reportId, instanceHost, reportUrl, port CDP (surchargeables par env)
+  config.ts                    ← reportId, instanceHost, reportUrl, port du Remote Agent BiDi (surchargeables par env)
   core/usecases/
     exportToSalesforce.uc.ts     ← crée le run, refuse (409) si un export est déjà en_cours,
                                      appelle exportJob, met à jour le statut, log activities.jsonl
     checkSalesforceSession.uc.ts ← lit le cookie via puppeteerSession, ping léger Salesforce,
                                      retourne connecte/deconnecte
   infra/
-    openBrowser.ts              ← lance le Chrome dédié (CDP + profil isolé + fenêtre 1920×1080)
+    openBrowser.ts              ← lance le Firefox dédié (WebDriver BiDi + profil isolé)
     salesforce/
-      puppeteerSession.ts         ← connexion CDP (puppeteer.connect browserURL) + lecture du cookie sid
+      puppeteerSession.ts         ← connexion WebDriver BiDi (puppeteer.connect browserWSEndpoint) + lecture du cookie sid
       sidToken.ts                   ← extrait le token Bearer du cookie sid
       sessionCheck.ts                ← ping léger API REST (Bearer sid) pour le check de connexion
       reportDescribe.ts               ← describe du report (colonnes, filtres, catalogue de champs)
@@ -196,7 +204,7 @@ back/src/
 ```
 
 Config externalisée dans `config.ts` (surchargeable par variables d'env `SALESFORCE_REPORT_ID`,
-`SALESFORCE_INSTANCE_HOST`, `SALESFORCE_REPORT_URL`, `CHROME_DEBUG_PORT`, `CHROME_USER_DATA_DIR`).
+`SALESFORCE_INSTANCE_HOST`, `SALESFORCE_REPORT_URL`, `FIREFOX_DEBUG_PORT`, `FIREFOX_USER_DATA_DIR`).
 
 ## Frontend — fichiers
 
@@ -231,17 +239,17 @@ Mapping `run.json` → affichage : `statut` → badge coloré, `dateDebut`/`date
 
 ```
 Lancement de l'app
-  → Chrome dédié s'ouvre (CDP actif, 1920×1080) avec le dashboard
+  → Firefox dédié s'ouvre (WebDriver BiDi actif) avec le dashboard
   → front monte SalesforceConnectionGate → premier check immédiat
   → si déconnecté : popup bloquant, boucle refetchInterval 10 min tant que l'app tourne
 
 Connexion Salesforce
-  → clic "Ouvrir Salesforce" → nouvel onglet dans le même Chrome (login + MFA manuels)
+  → clic "Ouvrir Salesforce" → nouvel onglet dans le même Firefox (login + MFA manuels)
   → clic "Vérifier" → POST /api/salesforce/session/check → toast + popup se ferme si connecté
 
 Export
   → clic "Lancer un export" (désactivé si déjà en_cours)
-  → POST /api/export → back lit le cookie sid via CDP → describe du report → run(s) via l'API
+  → POST /api/export → back lit le cookie sid via WebDriver BiDi → describe du report → run(s) via l'API
     Analytics (chunké par CreatedDate si > 2000 lignes)
   → CSV écrit dans runs/<runId>/output/export.csv, run.json mis à jour (succes/echec)
   → front poll GET /api/runs pendant que en_cours, affiche la liste mise à jour

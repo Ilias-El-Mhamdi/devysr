@@ -13,7 +13,7 @@ import {
   type ReportDescribeLike,
 } from '../domain/lead/columnRules';
 
-const SALESFORCE_SESSION_EXPIRED_ERROR = 'Salesforce session expired. Open Chrome and sign back in to Salesforce before retrying the import.';
+const SALESFORCE_SESSION_EXPIRED_ERROR = 'Salesforce session expired. Open Firefox and sign back in to Salesforce before retrying the import.';
 const LEAD_ID_HEADER = 'Lead ID';
 
 export class ImportAlreadyInProgressError extends Error {

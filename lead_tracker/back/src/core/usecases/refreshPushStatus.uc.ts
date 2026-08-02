@@ -7,7 +7,7 @@ import {
   type ReportDescribeLike,
 } from '../domain/lead/columnRules';
 
-const SALESFORCE_SESSION_EXPIRED_ERROR = 'Salesforce session expired. Open Chrome and sign back in to Salesforce to refresh the push status.';
+const SALESFORCE_SESSION_EXPIRED_ERROR = 'Salesforce session expired. Open Firefox and sign back in to Salesforce to refresh the push status.';
 
 export class PushRunNotFoundError extends Error {
   constructor() {

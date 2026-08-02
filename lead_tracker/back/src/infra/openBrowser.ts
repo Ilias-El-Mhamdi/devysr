@@ -1,40 +1,74 @@
 import path from 'node:path';
+import net from 'node:net';
 import { spawn } from 'node:child_process';
 import { config } from '../config';
 import { DATA_DIR } from '../paths';
 
-function findChromeExecutable(): string {
+function findFirefoxExecutable(): string {
   switch (process.platform) {
     case 'darwin':
-      return '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+      return '/Applications/Firefox.app/Contents/MacOS/firefox';
     case 'win32':
-      return 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
+      return 'C:\\Program Files\\Mozilla Firefox\\firefox.exe';
     default:
-      return 'google-chrome';
+      return 'firefox';
   }
 }
 
-// Lance un Chrome dédié à l'outil (profil isolé), avec le CDP (Chrome DevTools Protocol) exposé.
-// Un Chrome lancé normalement n'expose pas CDP : le flag doit être présent au lancement du
-// process, on ne peut pas se greffer après coup sur une instance déjà ouverte sans ce flag.
-// C'est ce même Chrome que l'utilisateur garde ouvert pour le dashboard ET pour se logger à
-// Salesforce (cf. features/exportLeads.md).
-export function launchDedicatedChrome(url: string): void {
-  const userDataDir = config.chrome.userDataDir ?? path.join(DATA_DIR, 'chrome-profile');
+// spawn() sur le binaire directement ne déclenche pas l'activation standard de l'app (contrairement
+// à un lancement depuis le Dock/Finder) : la fenêtre s'ouvre mais reste en arrière-plan derrière le
+// terminal qui a lancé le back. On force l'activation explicitement après coup.
+function focusFirefox(): void {
+  switch (process.platform) {
+    case 'darwin':
+      spawn('osascript', ['-e', 'tell application "Firefox" to activate'], { detached: true, stdio: 'ignore' }).unref();
+      break;
+    case 'win32':
+      spawn('powershell', ['-NoProfile', '-Command', "(New-Object -ComObject WScript.Shell).AppActivate('Mozilla Firefox')"], {
+        detached: true,
+        stdio: 'ignore',
+      }).unref();
+      break;
+  }
+}
 
-  const args = [
-    `--remote-debugging-port=${config.chrome.debugPort}`,
-    `--user-data-dir=${userDataDir}`,
-    '--no-first-run',
-    '--no-default-browser-check',
-    // --start-maximized est ignoré par Chromium sur macOS : --window-size sert de repli fiable
-    // sur toutes les plateformes.
-    '--start-maximized',
-    '--window-position=0,0',
-    '--window-size=1920,1080',
-    url,
-  ];
+function isPortOpen(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = net.connect({ port, host: '127.0.0.1', timeout: 500 });
+    socket.once('connect', () => {
+      socket.destroy();
+      resolve(true);
+    });
+    socket.once('error', () => resolve(false));
+    socket.once('timeout', () => {
+      socket.destroy();
+      resolve(false);
+    });
+  });
+}
 
-  const child = spawn(findChromeExecutable(), args, { detached: true, stdio: 'ignore' });
+// Point unique d'accès au navigateur : le Firefox dédié (profil isolé) affiche le dashboard ET
+// sert de session Salesforce loggée pour Puppeteer (connecté en WebDriver BiDi, cf.
+// puppeteerSession.ts) — un seul navigateur, plus de Chrome nulle part dans l'app.
+//
+// Si un Firefox dédié tourne déjà (relance de l'app sans avoir quitté Firefox), on ne relance pas
+// un process par-dessus : ça a déjà causé une accumulation d'onglets dupliqués avec l'ancien
+// Chrome dédié, et un second process sur le même profil Firefox se refuserait de toute façon à
+// démarrer.
+export async function launchDedicatedFirefox(url: string): Promise<void> {
+  if (await isPortOpen(config.firefox.debugPort)) {
+    focusFirefox();
+    return;
+  }
+
+  const userDataDir = config.firefox.userDataDir ?? path.join(DATA_DIR, 'firefox-profile');
+
+  const args = ['--profile', userDataDir, `--remote-debugging-port=${config.firefox.debugPort}`, url];
+
+  const child = spawn(findFirefoxExecutable(), args, { detached: true, stdio: 'ignore' });
+
+  // Laisse le temps à la fenêtre d'apparaître avant de tenter de l'activer.
+  setTimeout(focusFirefox, 1500);
+
   child.unref();
 }

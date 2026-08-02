@@ -9,7 +9,7 @@ interface ConfirmModalProps {
 
 export function ConfirmModal({ title, description, confirmLabel = 'Confirm', onConfirm, onCancel, isConfirming = false }: ConfirmModalProps) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90">
       <div className="glass-panel glow-violet w-full max-w-sm rounded-xl p-6">
         <h2 className="text-lg font-semibold text-slate-100">{title}</h2>
         <p className="mt-2 text-sm text-slate-400">{description}</p>

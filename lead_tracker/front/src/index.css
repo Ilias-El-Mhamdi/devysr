@@ -11,6 +11,15 @@
   --color-neon-amber: #fbbf24;
 }
 
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
 body {
   background: radial-gradient(circle at 20% -10%, rgba(168, 85, 247, 0.18), transparent 45%), radial-gradient(circle at 90% 0%, rgba(34, 211, 238, 0.14), transparent 40%), var(--color-void);
   color: #e2e8f0;
@@ -18,14 +27,11 @@ body {
 }
 
 .glass-panel {
-  background: rgba(11, 15, 26, 0.72);
+  /* Pas de backdrop-filter : bug de compositing Chromium non résolu (le flou repeint mal sur un
+     changement d'état déclenché par clic, visible comme un flash de resize) — présent sur Chrome
+     mac ET Windows, absent sur Safari. Fond opaque à la place, même rendu visuel sans le flou. */
+  background: rgba(11, 15, 26, 0.94);
   border: 1px solid rgba(148, 163, 184, 0.15);
-  backdrop-filter: blur(14px);
-  /* Force son propre calque de compositing : sans ça, Chromium (macOS) laisse parfois le flou
-     dans un état de peinture obsolète après un resize de fenêtre tant qu'aucun repaint n'est
-     déclenché (scroll/clic) — bug connu de backdrop-filter, pas un problème de layout React. */
-  transform: translateZ(0);
-  will-change: transform;
 }
 
 .glow-cyan {

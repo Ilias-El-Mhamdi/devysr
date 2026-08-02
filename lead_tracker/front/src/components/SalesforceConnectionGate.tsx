@@ -2,8 +2,8 @@ import type { ReactNode } from 'react';
 import { useSalesforceSession } from '../api/salesforceSession';
 import { toast } from '../lib/toast';
 
-// Doit matcher back/src/config.ts (config.salesforce.reportUrl) — l'ouverture se fait en pur front
-// (target="_blank" dans le même Chrome dédié), sans passer par le back.
+// Doit matcher back/src/config.ts (config.salesforce.reportUrl) — le dashboard et Salesforce
+// vivent dans le même Firefox dédié, donc un simple nouvel onglet (target="_blank") suffit.
 const SALESFORCE_REPORT_URL = 'https://orgfarm-fec657de9c-dev-ed.develop.lightning.force.com/lightning/r/Report/00Ofj00000FxuDdEAJ/edit';
 
 interface SalesforceConnectionGateProps {
@@ -34,11 +34,11 @@ export function SalesforceConnectionGate({ children }: SalesforceConnectionGateP
     <>
       {children}
       {!isConnected && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md [transform:translateZ(0)] [will-change:transform]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95">
           <div className="glass-panel glow-cyan w-full max-w-md rounded-2xl p-8 text-center">
             <p className="font-mono-display text-xs tracking-[0.3em] text-neon-cyan uppercase">Connection required</p>
             <h2 className="mt-3 text-xl font-semibold text-slate-100">Salesforce isn't connected</h2>
-            <p className="mt-2 text-sm text-slate-400">Sign in to Salesforce in the dedicated Chrome window, then check the connection here.</p>
+            <p className="mt-2 text-sm text-slate-400">Sign in to Salesforce in the tab that just opened, then check the connection here.</p>
             <div className="mt-6 flex flex-col gap-3">
               <a
                 href={SALESFORCE_REPORT_URL}

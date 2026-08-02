@@ -5,7 +5,7 @@ import { fetchReportDescribe } from './reportDescribe';
 import { fetchAllReportRows } from './reportRun';
 import { buildCsv } from 'shared/formatting/csv';
 
-export const SALESFORCE_SESSION_EXPIRED_ERROR = 'Salesforce session expired. Open Chrome and sign back in to Salesforce before retrying the export.';
+export const SALESFORCE_SESSION_EXPIRED_ERROR = 'Salesforce session expired. Open Firefox and sign back in to Salesforce before retrying the export.';
 const LEAD_ID_HEADER = 'Lead ID';
 
 // Exécute le vrai report Salesforce (via reportRun.ts) plutôt que l'export CSV legacy (bloqué sur
