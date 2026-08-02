@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import type { RunStatut } from 'shared/types/run';
-import { useHello } from '../../api/hello';
 import { useExportRuns, useStartExport } from '../../api/export';
 import { useImportRuns, useStartImport } from '../../api/import';
+import { useUpsyncRuns, useStartUpsync } from '../../api/upsync';
 import { useDeleteRun, runDownloadUrl } from '../../api/runs';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { toast } from '../../lib/toast';
@@ -48,8 +48,6 @@ function RunBadge({ statut, dateDebut }: { statut: RunStatut; dateDebut: string 
 }
 
 export function DashboardPage() {
-  const { data, isPending, isError } = useHello();
-
   const { data: exportRuns, isPending: isExportRunsPending } = useExportRuns();
   const startExport = useStartExport();
   const deleteExportRun = useDeleteRun(['export-runs']);
@@ -58,11 +56,16 @@ export function DashboardPage() {
   const startImport = useStartImport();
   const deleteImportRun = useDeleteRun(['import-runs']);
 
-  const [runToDelete, setRunToDelete] = useState<{ id: string; kind: 'export' | 'import' } | null>(null);
+  const { data: upsyncRuns, isPending: isUpsyncRunsPending } = useUpsyncRuns();
+  const startUpsync = useStartUpsync();
+  const deleteUpsyncRun = useDeleteRun(['upsync-runs']);
+
+  const [runToDelete, setRunToDelete] = useState<{ id: string; kind: 'export' | 'import' | 'upsync' } | null>(null);
   const [nouveauxUniquement, setNouveauxUniquement] = useState(false);
 
   const hasExportInProgress = exportRuns?.some((run) => run.statut === 'en_cours') ?? false;
   const hasImportInProgress = importRuns?.some((run) => run.statut === 'en_cours') ?? false;
+  const hasUpsyncInProgress = upsyncRuns?.some((run) => run.statut === 'en_cours') ?? false;
 
   const handleStartExport = () => {
     startExport.mutate(nouveauxUniquement, {
@@ -76,10 +79,17 @@ export function DashboardPage() {
     });
   };
 
+  const handleStartUpsync = () => {
+    startUpsync.mutate(undefined, {
+      onError: (error) => toast.error(error instanceof Error ? error.message : 'Upsync failed to start.'),
+    });
+  };
+
+  const deleteMutations = { export: deleteExportRun, import: deleteImportRun, upsync: deleteUpsyncRun } as const;
+
   const handleConfirmDelete = () => {
     if (!runToDelete) return;
-    const mutation = runToDelete.kind === 'export' ? deleteExportRun : deleteImportRun;
-    mutation.mutate(runToDelete.id, {
+    deleteMutations[runToDelete.kind].mutate(runToDelete.id, {
       onSuccess: () => setRunToDelete(null),
       onError: (error) => toast.error(error instanceof Error ? error.message : 'Deletion failed.'),
     });
@@ -90,10 +100,78 @@ export function DashboardPage() {
       <header className="glass-panel glow-cyan rounded-2xl px-8 py-6">
         <p className="font-mono-display text-xs tracking-[0.3em] text-neon-cyan uppercase">lead_tracker</p>
         <h1 className="mt-2 text-2xl font-semibold text-slate-100">Dashboard</h1>
-        {isPending && <p className="mt-2 text-sm text-slate-500">Connecting to the backend…</p>}
-        {isError && <p className="mt-2 text-sm text-neon-red">The backend isn't responding.</p>}
-        {data && <p className="mt-2 text-sm text-slate-400">{data.message}</p>}
       </header>
+
+      <section className="glass-panel glow-violet mt-8 rounded-2xl px-8 py-6">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-100">Upsync</h2>
+            <p className="mt-1 text-xs text-slate-500">Scans every distributor Excel file and builds a file to drop into the Salesforce Import Wizard.</p>
+          </div>
+          <button
+            type="button"
+            onClick={handleStartUpsync}
+            disabled={hasUpsyncInProgress || startUpsync.isPending}
+            className="cursor-pointer rounded-md bg-neon-violet/90 px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-neon-violet disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {hasUpsyncInProgress ? 'Upsync in progress…' : 'Run upsync'}
+          </button>
+        </div>
+
+        <div className="mt-6 flex flex-col gap-3">
+          {isUpsyncRunsPending && <p className="text-sm text-slate-500">Loading upsyncs…</p>}
+          {!isUpsyncRunsPending && upsyncRuns?.length === 0 && <p className="text-sm text-slate-500">No upsyncs yet.</p>}
+
+          {upsyncRuns?.map((run) => (
+            <div key={run.id} className="rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-3">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <RunBadge statut={run.statut} dateDebut={run.dateDebut} />
+                  {run.resume && (
+                    <>
+                      <p className="mt-1 text-sm text-slate-300">
+                        {run.resume.nbFichiersLus} file(s) scanned · {run.resume.nbLeadModifies} lead(s) modified ·{' '}
+                        {run.resume.nbDistributeursImpactes} distributor(s) impacted
+                        {run.resume.anomalies.length > 0 && ` · ${run.resume.anomalies.length} anomalie(s)`}
+                      </p>
+                      {run.resume.anomalies.length > 0 && (
+                        <ul className="mt-1 space-y-0.5 text-xs text-neon-amber">
+                          {run.resume.anomalies.map((anomalie, index) => (
+                            <li key={`${anomalie.leadId}-${index}`}>
+                              {anomalie.distributeur} · {anomalie.leadId} — {anomalie.raison}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </>
+                  )}
+                  {run.erreur && <p className="mt-1 text-sm text-neon-red">{run.erreur}</p>}
+                </div>
+
+                <div className="flex shrink-0 gap-2">
+                  {run.statut === 'succes' && run.output.fichier && (
+                    <a
+                      href={runDownloadUrl(run.id)}
+                      className="rounded-md border border-neon-cyan/40 px-3 py-1.5 text-xs font-medium text-neon-cyan hover:bg-neon-cyan/10"
+                    >
+                      Download
+                    </a>
+                  )}
+                  {run.statut !== 'en_cours' && (
+                    <button
+                      type="button"
+                      onClick={() => setRunToDelete({ id: run.id, kind: 'upsync' })}
+                      className="cursor-pointer rounded-md border border-slate-700 px-3 py-1.5 text-xs text-slate-400 hover:border-neon-red hover:text-neon-red"
+                    >
+                      Delete
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
 
       <section className="glass-panel glow-violet mt-8 rounded-2xl px-8 py-6">
         <div className="flex items-center justify-between gap-4">
@@ -215,10 +293,10 @@ export function DashboardPage() {
 
       {runToDelete && (
         <ConfirmModal
-          title={`Delete this ${runToDelete.kind === 'export' ? 'export' : 'import'}?`}
+          title={`Delete this ${runToDelete.kind}?`}
           description="The file and its history will be permanently deleted."
           confirmLabel="Delete"
-          isConfirming={runToDelete.kind === 'export' ? deleteExportRun.isPending : deleteImportRun.isPending}
+          isConfirming={deleteMutations[runToDelete.kind].isPending}
           onConfirm={handleConfirmDelete}
           onCancel={() => setRunToDelete(null)}
         />

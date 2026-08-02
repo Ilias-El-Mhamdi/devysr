@@ -1,4 +1,4 @@
-export type RunType = 'export' | 'import';
+export type RunType = 'export' | 'import' | 'upsync';
 
 export type RunStatut = 'en_cours' | 'succes' | 'echec';
 
@@ -49,4 +49,25 @@ export interface ImportRunResume {
 
 export type ImportRun = Run<ImportRunInput, ImportRunOutput, ImportRunResume>;
 
-export type AnyRun = ExportRun | ImportRun;
+export type UpsyncRunInput = Record<string, never>;
+
+export interface UpsyncRunOutput {
+  fichier: string | null;
+}
+
+export interface UpsyncAnomalie {
+  leadId: string;
+  distributeur: string;
+  raison: string;
+}
+
+export interface UpsyncRunResume {
+  nbFichiersLus: number;
+  nbLeadModifies: number;
+  nbDistributeursImpactes: number;
+  anomalies: UpsyncAnomalie[];
+}
+
+export type UpsyncRun = Run<UpsyncRunInput, UpsyncRunOutput, UpsyncRunResume>;
+
+export type AnyRun = ExportRun | ImportRun | UpsyncRun;

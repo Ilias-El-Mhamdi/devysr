@@ -97,3 +97,7 @@ export function outputFilePath(runId: string, fichier: string): string {
 export async function readRunOutputFile(runId: string, fichier: string): Promise<string> {
   return fs.readFile(outputFilePath(runId, fichier), 'utf-8');
 }
+
+export async function writeRunOutputFile(runId: string, fichier: string, content: string): Promise<void> {
+  await fs.writeFile(outputFilePath(runId, fichier), content, 'utf-8');
+}

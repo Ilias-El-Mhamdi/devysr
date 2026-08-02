@@ -3,7 +3,7 @@ import { getSalesforceSessionCookie } from './puppeteerSession';
 import { toBearerToken } from './sidToken';
 import { fetchReportDescribe } from './reportDescribe';
 import { fetchAllReportRows } from './reportRun';
-import { buildCsv } from './csv';
+import { buildCsv } from 'shared/formatting/csv';
 
 export const SALESFORCE_SESSION_EXPIRED_ERROR = 'Salesforce session expired. Open Chrome and sign back in to Salesforce before retrying the export.';
 const LEAD_ID_HEADER = 'Lead ID';

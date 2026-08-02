@@ -22,6 +22,11 @@ export interface ColumnRule {
   editable: boolean;
 }
 
+interface LeadRow {
+  id: string;
+  valeurs: Record<string, string>;
+}
+
 function workbookPath(distributeurNom: string): string {
   const safeName = distributeurNom.replace(/[\\/:*?"<>|]/g, '_');
   return path.join(DISTRIBUTORS_DIR, `${safeName}.xlsx`);
@@ -36,6 +41,19 @@ function classifySheet(statut: string | undefined): string {
 
 function findStatutHeader(headers: string[]): string | undefined {
   return headers.find((header) => header.trim().toLowerCase() === 'lead status');
+}
+
+// Best-effort, même heuristique que core/usecases/importFromSalesforce.uc.ts § extractCreationDateMs
+// (dupliquée ici plutôt que partagée : petite fonction pure, pas besoin d'accoupler infra/core pour ça).
+function extractCreationDateMs(valeurs: Record<string, string>): number {
+  const header = Object.keys(valeurs).find((key) => /date/i.test(key) && /(creat|création)/i.test(key));
+  const raw = header ? valeurs[header] : undefined;
+  if (!raw) return 0;
+  const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(raw.trim());
+  if (!match) return 0;
+  const [, jour, mois, annee] = match;
+  const ms = Date.UTC(Number(annee), Number(mois) - 1, Number(jour));
+  return Number.isNaN(ms) ? 0 : ms;
 }
 
 // `worksheet.dataValidations.add(range, validation)` existe à l'exécution (une seule règle par
@@ -75,7 +93,8 @@ function buildListesSheet(workbook: ExcelJS.Workbook, columnRules: Record<string
 // Dropdowns pour les picklists Salesforce + validation "non vide" pour les champs obligatoires —
 // posées une seule fois à la création du fichier, sur une plage large (au-delà des lignes déjà
 // remplies) pour couvrir aussi les lignes ajoutées lors des imports suivants sans avoir à les
-// reposer (et donc sans risquer de perturber les lignes existantes).
+// reposer (et donc sans risquer de perturber les lignes existantes). Utilisé uniquement sur "Leads"
+// — les feuilles de statut sont des vues lecture seule, rien à valider en saisie.
 function applyValidations(
   sheet: ExcelJS.Worksheet,
   headers: string[],
@@ -118,13 +137,23 @@ function applyValidations(
 // dès qu'une feuille est protégée : il suffit donc de déverrouiller explicitement les colonnes
 // éditables, pas de verrouiller les autres. Sélection/copie restent autorisées (utile pour ajouter
 // un commentaire Excel sur une cellule en lecture seule).
-async function applyProtection(sheet: ExcelJS.Worksheet, headers: string[], columnRules: Record<string, ColumnRule>): Promise<void> {
+async function applyEditableProtection(sheet: ExcelJS.Worksheet, headers: string[], columnRules: Record<string, ColumnRule>): Promise<void> {
   headers.forEach((header, index) => {
     if (columnRules[header]?.editable) {
       sheet.getColumn(index + 2).protection = { locked: false };
     }
   });
+  await protectSheet(sheet);
+}
 
+// Les feuilles de statut sont des VUES dérivées de "Leads" (jamais une copie indépendante avec son
+// propre état éditable) — entièrement verrouillées, aucune colonne déverrouillée. La modification
+// d'un lead se fait uniquement sur "Leads" ; ces feuilles ne servent qu'à naviguer/filtrer.
+async function applyReadOnlyProtection(sheet: ExcelJS.Worksheet): Promise<void> {
+  await protectSheet(sheet);
+}
+
+async function protectSheet(sheet: ExcelJS.Worksheet): Promise<void> {
   await sheet.protect('', {
     selectLockedCells: true,
     selectUnlockedCells: true,
@@ -142,15 +171,11 @@ async function applyProtection(sheet: ExcelJS.Worksheet, headers: string[], colu
   });
 }
 
-async function loadOrCreateWorkbook(
-  filePath: string,
-  headers: string[],
-  columnRules: Record<string, ColumnRule>,
-): Promise<{ workbook: ExcelJS.Workbook; isNew: boolean }> {
+async function loadOrCreateWorkbook(filePath: string, headers: string[], columnRules: Record<string, ColumnRule>): Promise<ExcelJS.Workbook> {
   const workbook = new ExcelJS.Workbook();
   try {
     await workbook.xlsx.readFile(filePath);
-    return { workbook, isNew: false };
+    return workbook;
   } catch {
     for (const sheetName of [LEADS_SHEET, ...STATUS_SHEETS]) {
       const sheet = workbook.addWorksheet(sheetName);
@@ -158,12 +183,66 @@ async function loadOrCreateWorkbook(
       sheet.getRow(1).font = { bold: true };
     }
     const listeRanges = buildListesSheet(workbook, columnRules);
-    for (const sheetName of [LEADS_SHEET, ...STATUS_SHEETS]) {
-      const sheet = workbook.getWorksheet(sheetName)!;
-      applyValidations(sheet, headers, columnRules, listeRanges);
-      await applyProtection(sheet, headers, columnRules);
+    applyValidations(workbook.getWorksheet(LEADS_SHEET)!, headers, columnRules, listeRanges);
+    await applyEditableProtection(workbook.getWorksheet(LEADS_SHEET)!, headers, columnRules);
+    return workbook;
+  }
+}
+
+// Retire toutes les lignes de données (tout sauf l'en-tête) pour reconstruire une feuille de vue à
+// l'identique du contenu courant de "Leads".
+function clearDataRows(sheet: ExcelJS.Worksheet): void {
+  if (sheet.rowCount > 1) {
+    sheet.spliceRows(2, sheet.rowCount - 1);
+  }
+}
+
+function cellText(value: ExcelJS.CellValue): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === 'object' && 'text' in value && typeof value.text === 'string') return value.text;
+  if (typeof value === 'object' && 'result' in value) return cellText(value.result);
+  return '';
+}
+
+function readAllLeadRows(sheet: ExcelJS.Worksheet, headers: string[]): LeadRow[] {
+  const rows: LeadRow[] = [];
+  sheet.eachRow((row, rowNumber) => {
+    if (rowNumber === 1) return;
+    const id = cellText(row.getCell(1).value).trim();
+    if (!id) return;
+    const valeurs: Record<string, string> = {};
+    headers.forEach((header, index) => {
+      valeurs[header] = cellText(row.getCell(index + 2).value);
+    });
+    rows.push({ id, valeurs });
+  });
+  return rows;
+}
+
+// Reconstruit entièrement les 3 feuilles de statut à partir du contenu actuel de "Leads" — jamais
+// une copie indépendante : une seule source de vérité par fichier (cf. features/upsync.md).
+async function rebuildStatusSheets(sheets: Map<string, ExcelJS.Worksheet>, headers: string[], allLeads: LeadRow[]): Promise<void> {
+  const statutHeader = findStatutHeader(headers);
+  const parStatut = new Map<string, LeadRow[]>();
+  for (const lead of allLeads) {
+    const sheetName = classifySheet(statutHeader ? lead.valeurs[statutHeader] : undefined);
+    const liste = parStatut.get(sheetName) ?? [];
+    liste.push(lead);
+    parStatut.set(sheetName, liste);
+  }
+
+  for (const sheetName of STATUS_SHEETS) {
+    const sheet = sheets.get(sheetName)!;
+    sheet.unprotect();
+    clearDataRows(sheet);
+    const leadsForSheet = (parStatut.get(sheetName) ?? []).sort((a, b) => extractCreationDateMs(b.valeurs) - extractCreationDateMs(a.valeurs));
+    for (const lead of leadsForSheet) {
+      sheet.addRow([lead.id, ...headers.map((header) => lead.valeurs[header] ?? '')]);
     }
-    return { workbook, isNew: true };
+    await applyReadOnlyProtection(sheet);
   }
 }
 
@@ -172,14 +251,15 @@ export interface LeadForWorkbook {
   valeurs: Record<string, string>;
 }
 
-// Append-only : les lignes déjà présentes (et leurs commentaires Excel éventuels) ne sont jamais
-// modifiées ni supprimées — le fichier est partagé avec le distributeur. "Leads" reçoit tous les
-// nouveaux leads en bas ; chaque lead est aussi ajouté à UNE des trois feuilles de statut ("À
-// traiter" / "En cours de traitement" / "Traités", selon Lead Status), en insertion juste après
-// l'en-tête plutôt qu'en bas, pour que les plus récents restent en haut sans déplacer les lignes
-// déjà présentes plus que nécessaire.
-// `leads` doit être trié du plus ancien au plus récent : chaque insertion en position 2 pousse les
-// précédentes vers le bas, donc le dernier inséré (le plus récent) se retrouve en haut.
+// Append-only sur "Leads" : les lignes déjà présentes (et leurs commentaires Excel éventuels) ne
+// sont jamais modifiées ni supprimées — le fichier est partagé avec le distributeur, et "Leads" est
+// la seule feuille éditable (source unique de vérité). Les 3 feuilles de statut ("À traiter" / "En
+// cours de traitement" / "Traités") sont entièrement régénérées à chaque écriture à partir du
+// contenu courant de "Leads" (donc toujours cohérentes avec les éventuelles modifications déjà
+// faites par le distributeur sur "Leads"), triées par date de création décroissante, verrouillées.
+// Limite connue : si un distributeur ne reçoit aucun nouveau lead lors d'un import, son fichier
+// n'est pas touché et ses vues de statut ne reflètent pas d'éventuelles modifications de Lead Status
+// faites entre-temps sur "Leads" — elles se remettront à jour au prochain import qui le concerne.
 export async function appendLeadsToDistributorWorkbook(
   distributeurNom: string,
   headers: string[],
@@ -192,7 +272,7 @@ export async function appendLeadsToDistributorWorkbook(
   await fs.mkdir(DISTRIBUTORS_DIR, { recursive: true });
 
   const filePath = workbookPath(distributeurNom);
-  const { workbook } = await loadOrCreateWorkbook(filePath, headers, columnRules);
+  const workbook = await loadOrCreateWorkbook(filePath, headers, columnRules);
   const allSheetNames = [LEADS_SHEET, ...STATUS_SHEETS];
   const sheets = new Map(allSheetNames.map((name) => [name, workbook.getWorksheet(name)]));
   if (allSheetNames.some((name) => !sheets.get(name))) {
@@ -204,20 +284,48 @@ export async function appendLeadsToDistributorWorkbook(
     leadsSheet.addRow([lead.id, ...headers.map((header) => lead.valeurs[header] ?? '')]);
   }
 
-  const statutHeader = findStatutHeader(headers);
-  const parStatut = new Map<string, LeadForWorkbook[]>();
-  for (const lead of leads) {
-    const sheetName = classifySheet(statutHeader ? lead.valeurs[statutHeader] : undefined);
-    const liste = parStatut.get(sheetName) ?? [];
-    liste.push(lead);
-    parStatut.set(sheetName, liste);
-  }
-  for (const sheetName of STATUS_SHEETS) {
-    const sheet = sheets.get(sheetName)!;
-    for (const lead of parStatut.get(sheetName) ?? []) {
-      sheet.insertRow(2, [lead.id, ...headers.map((header) => lead.valeurs[header] ?? '')]);
-    }
-  }
+  const allLeads = readAllLeadRows(leadsSheet, headers);
+  await rebuildStatusSheets(sheets as Map<string, ExcelJS.Worksheet>, headers, allLeads);
 
   await workbook.xlsx.writeFile(filePath);
+}
+
+export interface DistributorLeadsSheet {
+  headers: string[];
+  rows: LeadRow[];
+}
+
+// Noms de fichiers présents dans data/distributeurs/ (sans l'extension) — utilisé par Upsync pour
+// parcourir tous les distributeurs sans dépendre de distributeurs.json (un fichier peut exister
+// même si son entrée a été renommée/modifiée côté JSON).
+export async function listDistributorNames(): Promise<string[]> {
+  await fs.mkdir(DISTRIBUTORS_DIR, { recursive: true });
+  const entries = await fs.readdir(DISTRIBUTORS_DIR, { withFileTypes: true });
+  return entries.filter((entry) => entry.isFile() && entry.name.endsWith('.xlsx')).map((entry) => entry.name.slice(0, -'.xlsx'.length));
+}
+
+// Lit la feuille "Leads" (seule feuille éditable) telle quelle : en-têtes propres au fichier (pas
+// ceux du report courant, au cas où ils auraient changé depuis la création du fichier) + valeurs
+// actuelles de chaque ligne, potentiellement modifiées par le distributeur — cf. features/upsync.md.
+export async function readDistributorLeadsSheet(distributeurNom: string): Promise<DistributorLeadsSheet | null> {
+  const filePath = workbookPath(distributeurNom);
+  const workbook = new ExcelJS.Workbook();
+  try {
+    await workbook.xlsx.readFile(filePath);
+  } catch {
+    return null;
+  }
+
+  const sheet = workbook.getWorksheet(LEADS_SHEET);
+  if (!sheet) {
+    return null;
+  }
+
+  const headerRow = sheet.getRow(1);
+  const headers: string[] = [];
+  for (let col = 2; col <= headerRow.cellCount; col += 1) {
+    headers.push(cellText(headerRow.getCell(col).value));
+  }
+
+  return { headers, rows: readAllLeadRows(sheet, headers) };
 }

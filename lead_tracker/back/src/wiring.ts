@@ -1,13 +1,23 @@
 import express, { type Express } from 'express';
-import { registerHelloController } from './infra/http/controllers/hello.controller';
 import { registerExportController } from './infra/http/controllers/export.controller';
 import { registerImportController } from './infra/http/controllers/import.controller';
+import { registerUpsyncController } from './infra/http/controllers/upsync.controller';
 import { registerRunsController } from './infra/http/controllers/runs.controller';
 import { registerSalesforceSessionController } from './infra/http/controllers/salesforceSession.controller';
 import { createExportToSalesforceUseCase } from './core/usecases/exportToSalesforce.uc';
 import { createImportFromSalesforceUseCase } from './core/usecases/importFromSalesforce.uc';
+import { createUpsyncFromDistributorsUseCase } from './core/usecases/upsyncFromDistributors.uc';
 import { createCheckSalesforceSessionUseCase } from './core/usecases/checkSalesforceSession.uc';
-import { completeRun, createRun, failRun, getRun, hasRunInProgress, outputFilePath, readRunOutputFile } from './infra/store/runs.store';
+import {
+  completeRun,
+  createRun,
+  failRun,
+  getRun,
+  hasRunInProgress,
+  outputFilePath,
+  readRunOutputFile,
+  writeRunOutputFile,
+} from './infra/store/runs.store';
 import { getAllLeads, upsertLead } from './infra/store/leads.store';
 import { getAllDistributeurs, saveDistributeur } from './infra/store/distributeurs.store';
 import { logActivity } from './infra/store/observability.store';
@@ -17,7 +27,7 @@ import { pingSalesforceSession } from './infra/salesforce/sessionCheck';
 import { toBearerToken } from './infra/salesforce/sidToken';
 import { fetchLeadFieldsMeta } from './infra/salesforce/leadFieldMeta';
 import { fetchReportDescribe } from './infra/salesforce/reportDescribe';
-import { appendLeadsToDistributorWorkbook } from './infra/excel/distributorWorkbook';
+import { appendLeadsToDistributorWorkbook, listDistributorNames, readDistributorLeadsSheet } from './infra/excel/distributorWorkbook';
 import { config } from './config';
 
 export function buildApp(): Express {
@@ -56,14 +66,30 @@ export function buildApp(): Express {
     logActivity,
   });
 
+  const upsyncFromDistributors = createUpsyncFromDistributorsUseCase({
+    hasRunInProgress,
+    createRun,
+    completeRun,
+    failRun,
+    writeRunOutputFile,
+    getAllLeads,
+    getSalesforceSessionCookie,
+    toBearerToken,
+    fetchReportDescribe,
+    fetchLeadFieldsMeta,
+    listDistributorNames,
+    readDistributorLeadsSheet,
+    logActivity,
+  });
+
   const checkSalesforceSession = createCheckSalesforceSessionUseCase({
     getSalesforceSessionCookie,
     pingSalesforceSession,
   });
 
-  app.use('/api', registerHelloController());
   app.use('/api', registerExportController({ exportToSalesforce }));
   app.use('/api', registerImportController({ importFromSalesforce }));
+  app.use('/api', registerUpsyncController({ upsyncFromDistributors }));
   app.use('/api', registerRunsController());
   app.use('/api', registerSalesforceSessionController({ checkSalesforceSession }));
 
