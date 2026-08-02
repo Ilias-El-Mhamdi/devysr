@@ -21,6 +21,11 @@ body {
   background: rgba(11, 15, 26, 0.72);
   border: 1px solid rgba(148, 163, 184, 0.15);
   backdrop-filter: blur(14px);
+  /* Force son propre calque de compositing : sans ça, Chromium (macOS) laisse parfois le flou
+     dans un état de peinture obsolète après un resize de fenêtre tant qu'aucun repaint n'est
+     déclenché (scroll/clic) — bug connu de backdrop-filter, pas un problème de layout React. */
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 .glow-cyan {

@@ -34,7 +34,7 @@ export function SalesforceConnectionGate({ children }: SalesforceConnectionGateP
     <>
       {children}
       {!isConnected && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md [transform:translateZ(0)] [will-change:transform]">
           <div className="glass-panel glow-cyan w-full max-w-md rounded-2xl p-8 text-center">
             <p className="font-mono-display text-xs tracking-[0.3em] text-neon-cyan uppercase">Connection required</p>
             <h2 className="mt-3 text-xl font-semibold text-slate-100">Salesforce isn't connected</h2>

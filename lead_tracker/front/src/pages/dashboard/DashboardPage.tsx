@@ -155,7 +155,7 @@ export function DashboardPage() {
   };
 
   return (
-    <main className="mx-auto min-h-screen max-w-3xl px-6 py-12">
+    <main className="min-h-screen px-6 py-12 sm:px-10 lg:px-16">
       <header className="glass-panel glow-cyan rounded-2xl px-8 py-6">
         <p className="font-mono-display text-xs tracking-[0.3em] text-neon-cyan uppercase">lead_tracker</p>
         <h1 className="mt-2 text-2xl font-semibold text-slate-100">Dashboard</h1>
