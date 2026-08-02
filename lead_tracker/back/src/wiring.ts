@@ -5,12 +5,14 @@ import { registerUpsyncController } from './infra/http/controllers/upsync.contro
 import { registerPushController } from './infra/http/controllers/push.controller';
 import { registerRunsController } from './infra/http/controllers/runs.controller';
 import { registerSalesforceSessionController } from './infra/http/controllers/salesforceSession.controller';
+import { registerVerifyController } from './infra/http/controllers/verify.controller';
 import { createExportToSalesforceUseCase } from './core/usecases/exportToSalesforce.uc';
 import { createImportFromSalesforceUseCase } from './core/usecases/importFromSalesforce.uc';
 import { createUpsyncFromDistributorsUseCase } from './core/usecases/upsyncFromDistributors.uc';
 import { createPushToSalesforceUseCase } from './core/usecases/pushToSalesforce.uc';
 import { createRefreshPushStatusUseCase } from './core/usecases/refreshPushStatus.uc';
 import { createApplyUpsyncDiffToLeadsUseCase } from './core/usecases/applyUpsyncDiffToLeads.uc';
+import { createVerifyUseCase } from './core/usecases/verify.uc';
 import { createCheckSalesforceSessionUseCase } from './core/usecases/checkSalesforceSession.uc';
 import {
   completeRun,
@@ -130,12 +132,29 @@ export function buildApp(): Express {
     pingSalesforceSession,
   });
 
+  const verify = createVerifyUseCase({
+    hasRunInProgress,
+    getExportRun: getRun,
+    readRunOutputFile,
+    createRun,
+    completeRun,
+    failRun,
+    writeRunOutputFile,
+    getAllLeads,
+    getSalesforceSessionCookie,
+    toBearerToken,
+    fetchReportDescribe,
+    fetchLeadFieldsMeta,
+    logActivity,
+  });
+
   app.use('/api', registerExportController({ exportToSalesforce }));
   app.use('/api', registerImportController({ importFromSalesforce }));
   app.use('/api', registerUpsyncController({ upsyncFromDistributors }));
   app.use('/api', registerPushController({ pushToSalesforce, refreshPushStatus }));
   app.use('/api', registerRunsController());
   app.use('/api', registerSalesforceSessionController({ checkSalesforceSession }));
+  app.use('/api', registerVerifyController({ verify }));
 
   return app;
 }

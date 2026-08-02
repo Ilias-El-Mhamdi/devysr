@@ -1,4 +1,4 @@
-export type RunType = 'export' | 'import' | 'upsync' | 'push';
+export type RunType = 'export' | 'import' | 'upsync' | 'push' | 'verify';
 
 export type RunStatut = 'en_cours' | 'succes' | 'echec';
 
@@ -90,4 +90,22 @@ export interface PushRunResume {
 
 export type PushRun = Run<PushRunInput, PushRunOutput, PushRunResume>;
 
-export type AnyRun = ExportRun | ImportRun | UpsyncRun | PushRun;
+export interface VerifyRunInput {
+  exportRunId: string;
+}
+
+export interface VerifyRunOutput {
+  fichier: string | null;
+}
+
+export interface VerifyRunResume {
+  // Run d'export utilisé comme référence pour la comparaison (cf. VerifyRunInput.exportRunId) —
+  // dupliqué ici pour que le rapport du run reste lisible sans devoir aller relire son input.
+  exportRunId: string;
+  nbLeadEcart: number;
+  nbDistributeursImpactes: number;
+}
+
+export type VerifyRun = Run<VerifyRunInput, VerifyRunOutput, VerifyRunResume>;
+
+export type AnyRun = ExportRun | ImportRun | UpsyncRun | PushRun | VerifyRun;

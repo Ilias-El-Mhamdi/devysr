@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { RunStatut } from 'shared/types/run';
 import { useExportRuns, useStartExport } from '../../api/export';
 import { useImportRuns, useStartImport } from '../../api/import';
+import { useVerifyRuns, useStartVerify } from '../../api/verify';
 import { useUpsyncRuns, useStartUpsync } from '../../api/upsync';
 import { usePushRuns, useStartPush, useRefreshPushStatus } from '../../api/push';
 import { useDeleteRun, runDownloadUrl } from '../../api/runs';
@@ -88,13 +89,18 @@ export function DashboardPage() {
   const refreshPushStatus = useRefreshPushStatus();
   const deletePushRun = useDeleteRun(['push-runs']);
 
-  const [runToDelete, setRunToDelete] = useState<{ id: string; kind: 'export' | 'import' | 'upsync' | 'push' } | null>(null);
+  const { data: verifyRuns, isPending: isVerifyRunsPending } = useVerifyRuns();
+  const startVerify = useStartVerify();
+  const deleteVerifyRun = useDeleteRun(['verify-runs']);
+
+  const [runToDelete, setRunToDelete] = useState<{ id: string; kind: 'export' | 'import' | 'upsync' | 'push' | 'verify' } | null>(null);
   const [nouveauxUniquement, setNouveauxUniquement] = useState(false);
 
   const hasExportInProgress = exportRuns?.some((run) => run.statut === 'en_cours') ?? false;
   const hasImportInProgress = importRuns?.some((run) => run.statut === 'en_cours') ?? false;
   const hasUpsyncInProgress = upsyncRuns?.some((run) => run.statut === 'en_cours') ?? false;
   const hasPushInProgress = pushRuns?.some((run) => run.statut === 'en_cours') ?? false;
+  const hasVerifyInProgress = verifyRuns?.some((run) => run.statut === 'en_cours') ?? false;
 
   const handleStartExport = () => {
     startExport.mutate(nouveauxUniquement, {
@@ -126,7 +132,19 @@ export function DashboardPage() {
     });
   };
 
-  const deleteMutations = { export: deleteExportRun, import: deleteImportRun, upsync: deleteUpsyncRun, push: deletePushRun } as const;
+  const handleStartVerify = (exportRunId: string) => {
+    startVerify.mutate(exportRunId, {
+      onError: (error) => toast.error(error instanceof Error ? error.message : 'Verify failed to start.'),
+    });
+  };
+
+  const deleteMutations = {
+    export: deleteExportRun,
+    import: deleteImportRun,
+    upsync: deleteUpsyncRun,
+    push: deletePushRun,
+    verify: deleteVerifyRun,
+  } as const;
 
   const handleConfirmDelete = () => {
     if (!runToDelete) return;
@@ -343,6 +361,14 @@ export function DashboardPage() {
                       >
                         Import
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => handleStartVerify(run.id)}
+                        disabled={hasVerifyInProgress || startVerify.isPending}
+                        className="cursor-pointer rounded-md border border-neon-amber/40 px-3 py-1.5 text-xs font-medium text-neon-amber hover:bg-neon-amber/10 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Verify
+                      </button>
                     </>
                   )}
                   {run.statut !== 'en_cours' && (
@@ -392,6 +418,55 @@ export function DashboardPage() {
                     Delete
                   </button>
                 )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="glass-panel glow-violet mt-8 rounded-2xl px-8 py-6">
+        <h2 className="text-lg font-semibold text-slate-100">Verifications</h2>
+        <p className="mt-1 text-xs text-slate-500">
+          Checks that leads.json is up to date with a given export, on the fields editable by distributors.
+        </p>
+
+        <div className="mt-6 flex flex-col gap-3">
+          {isVerifyRunsPending && <p className="text-sm text-slate-500">Loading verifications…</p>}
+          {!isVerifyRunsPending && verifyRuns?.length === 0 && <p className="text-sm text-slate-500">No verifications yet.</p>}
+
+          {verifyRuns?.map((run) => (
+            <div key={run.id} className="rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-3">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <RunBadge statut={run.statut} dateDebut={run.dateDebut} />
+                  {run.resume && (
+                    <p className="mt-1 text-sm text-slate-300">
+                      {run.resume.nbLeadEcart} lead(s) out of sync · {run.resume.nbDistributeursImpactes} distributor(s) impacted · reference
+                      export {run.resume.exportRunId}
+                    </p>
+                  )}
+                  {run.erreur && <p className="mt-1 text-sm text-neon-red">{run.erreur}</p>}
+                </div>
+
+                <div className="flex shrink-0 gap-2">
+                  {run.statut === 'succes' && run.output.fichier && (
+                    <a
+                      href={runDownloadUrl(run.id)}
+                      className="rounded-md border border-neon-cyan/40 px-3 py-1.5 text-xs font-medium text-neon-cyan hover:bg-neon-cyan/10"
+                    >
+                      Download
+                    </a>
+                  )}
+                  {run.statut !== 'en_cours' && (
+                    <button
+                      type="button"
+                      onClick={() => setRunToDelete({ id: run.id, kind: 'verify' })}
+                      className="cursor-pointer rounded-md border border-slate-700 px-3 py-1.5 text-xs whitespace-nowrap text-slate-400 hover:border-neon-red hover:text-neon-red"
+                    >
+                      Delete
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           ))}
