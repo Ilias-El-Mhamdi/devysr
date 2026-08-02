@@ -441,8 +441,7 @@ export function DashboardPage() {
                   <RunBadge statut={run.statut} dateDebut={run.dateDebut} />
                   {run.resume && (
                     <p className="mt-1 text-sm text-slate-300">
-                      {run.resume.nbLeadEcart} lead(s) out of sync · {run.resume.nbDistributeursImpactes} distributor(s) impacted · reference
-                      export {run.resume.exportRunId}
+                      {run.resume.nbLeadEcart} lead(s) out of sync · {run.resume.nbDistributeursImpactes} distributor(s) impacted
                     </p>
                   )}
                   {run.erreur && <p className="mt-1 text-sm text-neon-red">{run.erreur}</p>}
