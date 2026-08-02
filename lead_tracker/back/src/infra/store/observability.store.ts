@@ -1,7 +1,8 @@
 import path from 'node:path';
 import fs from 'node:fs/promises';
+import { DATA_DIR } from '../../paths';
 
-const OBSERVABILITY_DIR = path.resolve(__dirname, '../../../data/observability');
+const OBSERVABILITY_DIR = path.join(DATA_DIR, 'observability');
 
 interface Activity {
   nomActivite: string;

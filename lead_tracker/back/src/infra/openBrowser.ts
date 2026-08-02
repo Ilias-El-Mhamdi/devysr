@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { config } from '../config';
+import { DATA_DIR } from '../paths';
 
 function findChromeExecutable(): string {
   switch (process.platform) {
@@ -19,7 +20,7 @@ function findChromeExecutable(): string {
 // C'est ce même Chrome que l'utilisateur garde ouvert pour le dashboard ET pour se logger à
 // Salesforce (cf. features/exportLeads.md).
 export function launchDedicatedChrome(url: string): void {
-  const userDataDir = config.chrome.userDataDir ?? path.resolve(__dirname, '../../data/chrome-profile');
+  const userDataDir = config.chrome.userDataDir ?? path.join(DATA_DIR, 'chrome-profile');
 
   const args = [
     `--remote-debugging-port=${config.chrome.debugPort}`,

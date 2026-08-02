@@ -2,8 +2,9 @@ import path from 'node:path';
 import fs from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import type { AnyRun, RunType } from 'shared/types/run';
+import { DATA_DIR } from '../../paths';
 
-const RUNS_DIR = path.resolve(__dirname, '../../../data/runs');
+const RUNS_DIR = path.join(DATA_DIR, 'runs');
 
 function runDir(runId: string): string {
   return path.join(RUNS_DIR, runId);

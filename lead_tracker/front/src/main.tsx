@@ -5,6 +5,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { DashboardPage } from './pages/dashboard/DashboardPage';
 import { SalesforceConnectionGate } from './components/SalesforceConnectionGate';
 import { ToastViewport } from './components/ToastViewport';
+import { VersionBadge } from './components/VersionBadge';
 import './index.css';
 
 const queryClient = new QueryClient({
@@ -26,6 +27,7 @@ createRoot(rootElement).render(
           </Routes>
         </BrowserRouter>
         <ToastViewport />
+        <VersionBadge />
       </SalesforceConnectionGate>
     </QueryClientProvider>
   </StrictMode>,

@@ -6,6 +6,7 @@ import { registerPushController } from './infra/http/controllers/push.controller
 import { registerRunsController } from './infra/http/controllers/runs.controller';
 import { registerSalesforceSessionController } from './infra/http/controllers/salesforceSession.controller';
 import { registerVerifyController } from './infra/http/controllers/verify.controller';
+import { registerVersionController } from './infra/http/controllers/version.controller';
 import { createExportToSalesforceUseCase } from './core/usecases/exportToSalesforce.uc';
 import { createImportFromSalesforceUseCase } from './core/usecases/importFromSalesforce.uc';
 import { createUpsyncFromDistributorsUseCase } from './core/usecases/upsyncFromDistributors.uc';
@@ -155,6 +156,7 @@ export function buildApp(): Express {
   app.use('/api', registerRunsController());
   app.use('/api', registerSalesforceSessionController({ checkSalesforceSession }));
   app.use('/api', registerVerifyController({ verify }));
+  app.use('/api', registerVersionController());
 
   return app;
 }

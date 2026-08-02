@@ -1,8 +1,9 @@
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import type { Distributeur } from 'shared/types/distributeur';
+import { DATA_DIR } from '../../paths';
 
-const DISTRIBUTEURS_PATH = path.resolve(__dirname, '../../../data/distributeurs.json');
+const DISTRIBUTEURS_PATH = path.join(DATA_DIR, 'distributeurs.json');
 
 async function readAll(): Promise<Record<string, Distributeur>> {
   try {

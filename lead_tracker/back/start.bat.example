@@ -1,0 +1,6 @@
+@echo off
+REM Copier ce fichier en "start.bat" dans le dossier back/ (au meme niveau que le dossier dist/,
+REM pas dedans) et adapter le chemin ci-dessous.
+set DISTRIBUTORS_DIR=\\serveur\partage\distributeurs
+node dist\main.js
+pause

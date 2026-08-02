@@ -1,8 +1,10 @@
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import ExcelJS from 'exceljs';
+import { DATA_DIR } from '../../paths';
+import { config } from '../../config';
 
-const DISTRIBUTORS_DIR = path.resolve(__dirname, '../../../data/distributeurs');
+const DISTRIBUTORS_DIR = config.storage.distributorsDir ?? path.join(DATA_DIR, 'distributeurs');
 const LEADS_SHEET = 'Leads';
 const A_TRAITER_SHEET = 'À traiter';
 const EN_COURS_SHEET = 'En cours de traitement';

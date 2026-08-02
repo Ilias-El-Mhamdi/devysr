@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import express from 'express';
 import { buildApp } from './wiring';
 import { launchDedicatedChrome } from './infra/openBrowser';
+import { PROJECT_ROOT } from './paths';
 
 const PORT = Number(process.env.PORT ?? 4000);
 
@@ -11,7 +12,7 @@ const app = buildApp();
 // En prod, front/dist existe (npm run build a tourné) : le back sert directement le build.
 // En dev, front/dist n'existe pas encore : c'est le Vite dev server (port 5173) qui sert le front,
 // avec un proxy /api → ce serveur (cf. front/vite.config.ts).
-const frontDist = path.resolve(__dirname, '../../front/dist');
+const frontDist = path.join(PROJECT_ROOT, 'front/dist');
 const isProdServe = fs.existsSync(frontDist);
 
 if (isProdServe) {

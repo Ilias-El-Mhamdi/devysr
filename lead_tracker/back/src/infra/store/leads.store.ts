@@ -1,9 +1,10 @@
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import type { LeadRecord } from 'shared/types/lead';
+import { DATA_DIR } from '../../paths';
 
-const LEADS_PATH = path.resolve(__dirname, '../../../data/leads.json');
-const HISTORIQUE_PATH = path.resolve(__dirname, '../../../data/leads_historique.jsonl');
+const LEADS_PATH = path.join(DATA_DIR, 'leads.json');
+const HISTORIQUE_PATH = path.join(DATA_DIR, 'leads_historique.jsonl');
 
 async function readAll(): Promise<Record<string, LeadRecord>> {
   try {
