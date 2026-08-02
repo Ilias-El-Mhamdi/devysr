@@ -13,9 +13,9 @@ REM defaut : dossier "data" a la racine du projet (a cote de back/ et front/)
 REM set DATA_DIR=C:\chemin\vers\data
 
 REM --- Fichiers Excel distributeurs (partage reseau) ---
-REM defaut : DATA_DIR\distributeurs -- A ADAPTER, c'est le chemin qui doit pointer vers le
-REM partage reseau reel de l'entreprise.
-set DISTRIBUTORS_DIR=\\serveur\partage\distributeurs
+REM defaut : DATA_DIR\distributeurs -- decommenter et adapter si le dossier vit ailleurs
+REM (ex. un partage reseau).
+REM set DISTRIBUTORS_DIR=\\serveur\partage\distributeurs
 
 REM --- Chrome dedie (session Salesforce) ---
 REM set CHROME_DEBUG_PORT=9222
