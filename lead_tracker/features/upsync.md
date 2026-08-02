@@ -41,9 +41,11 @@ ligne). Pour chaque lead :
    entre la valeur actuelle dans l'Excel et celle enregistrée dans `leads.json` → si au moins une
    diffère, le lead est inclus dans le fichier de sortie avec ses valeurs éditables **actuelles**.
 
-Upsync est **read-only vis-à-vis de `leads.json`** : il ne met rien à jour lui-même. La boucle se
-referme naturellement via le cycle Export → Import habituel, une fois que le directeur a
-effectivement déposé le CSV dans le Import Wizard Salesforce.
+Upsync lui-même est **read-only vis-à-vis de `leads.json`** : il ne met rien à jour, il ne fait que
+produire le CSV. La boucle se referme au moment du push (§ Push ci-dessous) : dès que le job Bulk
+API est intégralement terminé, les valeurs éditables confirmées par Salesforce sont appliquées à
+`leads.json` — pas besoin d'attendre le prochain cycle Export → Import complet pour voir l'état
+local à jour.
 
 ## Fichier de sortie
 
@@ -135,3 +137,26 @@ même mécanisme sid-comme-bearer-token que le reste du projet.
 
 Test réel final (2 leads modifiés sur 2 distributeurs différents, avec des champs `"-"` non touchés dans la
 même ligne) → job `JobComplete`, 2 traités, 0 échec.
+
+## Application du diff dans `leads.json` (fermeture de la boucle)
+
+Dès qu'un job Bulk API est **intégralement traité** (`etatSalesforce === 'JobComplete'` et
+`nbEnregistresEnEchec === 0`), les valeurs éditables du CSV upsync poussé sont appliquées à
+`leads.json` (`applyUpsyncDiffToLeads.uc.ts`) : même mécanisme que l'import (hash recalculé,
+`dateDerniereModification` mise à jour, une ligne par champ changé dans `leads_historique.jsonl`
+via `upsertLead`). Seules les colonnes éditables du describe de report courant sont écrites — jamais
+les colonnes en lecture seule.
+
+**Ce point est délibérément ignoré si le job a des enregistrements en échec** : `JobComplete` avec
+`nbEnregistresEnEchec > 0` mélange des lignes acceptées et refusées par Salesforce, qu'on ne sait
+pas distinguer sans un appel Bulk API supplémentaire (`failedResults`, pas implémenté) — dans ce
+cas rien n'est appliqué à `leads.json`, plutôt que de risquer d'y écrire une valeur que Salesforce a
+en fait refusée. Le directeur garde alors le cycle Export → Import habituel comme filet de sécurité.
+
+Deux points d'entrée selon la vitesse du job, tous deux protégés par le flag `leadsAppliques` du
+run push pour ne jamais appliquer le même diff deux fois :
+- `pushToSalesforce.uc.ts` — si le job est déjà `JobComplete` dès le premier `getJobStatus` (job
+  rapide, peu de lignes).
+- `refreshPushStatus.uc.ts` — sinon, à la première réponse `JobComplete` obtenue via le bouton
+  "Refresh status" (le job Bulk API continue de traiter les enregistrements de façon asynchrone
+  après la soumission, cf. § Push).

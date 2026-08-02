@@ -83,6 +83,9 @@ export interface PushRunResume {
   etatSalesforce: PushJobEtat;
   nbEnregistresTraites: number | null;
   nbEnregistresEnEchec: number | null;
+  // true une fois que les valeurs éditables confirmées par Salesforce (JobComplete, 0 échec) ont
+  // été appliquées à leads.json — cf. applyUpsyncDiffToLeads.uc.ts.
+  leadsAppliques: boolean;
 }
 
 export type PushRun = Run<PushRunInput, PushRunOutput, PushRunResume>;

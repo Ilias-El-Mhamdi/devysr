@@ -10,6 +10,7 @@ import { createImportFromSalesforceUseCase } from './core/usecases/importFromSal
 import { createUpsyncFromDistributorsUseCase } from './core/usecases/upsyncFromDistributors.uc';
 import { createPushToSalesforceUseCase } from './core/usecases/pushToSalesforce.uc';
 import { createRefreshPushStatusUseCase } from './core/usecases/refreshPushStatus.uc';
+import { createApplyUpsyncDiffToLeadsUseCase } from './core/usecases/applyUpsyncDiffToLeads.uc';
 import { createCheckSalesforceSessionUseCase } from './core/usecases/checkSalesforceSession.uc';
 import {
   completeRun,
@@ -87,6 +88,11 @@ export function buildApp(): Express {
     logActivity,
   });
 
+  const applyUpsyncDiffToLeads = createApplyUpsyncDiffToLeadsUseCase({
+    getAllLeads,
+    upsertLead,
+  });
+
   const pushToSalesforce = createPushToSalesforceUseCase({
     hasRunInProgress,
     getUpsyncRun: getRun,
@@ -102,15 +108,21 @@ export function buildApp(): Express {
     uploadJobData,
     closeJob,
     getJobStatus,
+    applyUpsyncDiffToLeads,
     logActivity,
   });
 
   const refreshPushStatus = createRefreshPushStatusUseCase({
     getRun,
+    getUpsyncRun: getRun,
+    readRunOutputFile,
     patchRunResume,
     getSalesforceSessionCookie,
     toBearerToken,
+    fetchReportDescribe,
+    fetchLeadFieldsMeta,
     getJobStatus,
+    applyUpsyncDiffToLeads,
   });
 
   const checkSalesforceSession = createCheckSalesforceSessionUseCase({

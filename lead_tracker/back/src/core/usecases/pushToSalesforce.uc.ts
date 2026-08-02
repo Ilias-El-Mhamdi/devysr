@@ -4,6 +4,7 @@ import { buildCsv } from 'shared/formatting/csv';
 import {
   buildColumnRules,
   editableApiNamesByHeader,
+  editableHeadersFrom,
   requiredApiNamesFrom,
   type LeadFieldMetaLike,
   type ReportDescribeLike,
@@ -53,6 +54,7 @@ export interface PushToSalesforceDeps {
   uploadJobData: (bearerToken: string, jobId: string, csv: string) => Promise<void>;
   closeJob: (bearerToken: string, jobId: string) => Promise<void>;
   getJobStatus: (bearerToken: string, jobId: string) => Promise<BulkJobStatusLike>;
+  applyUpsyncDiffToLeads: (csv: string, editableHeaders: ReadonlySet<string>) => Promise<number>;
   logActivity: (activite: { nomActivite: string; nbLead?: number; date: string }) => Promise<void>;
 }
 
@@ -83,13 +85,23 @@ function buildBulkCsv(csv: string, apiNamesByHeader: Record<string, string>): st
   return buildCsv(bulkHeaders, bulkRows);
 }
 
-function toResume(jobId: string, status: BulkJobStatusLike): PushRunResume {
+function toResume(jobId: string, status: BulkJobStatusLike, leadsAppliques: boolean): PushRunResume {
   return {
     jobId,
     etatSalesforce: status.state,
     nbEnregistresTraites: status.numberRecordsProcessed,
     nbEnregistresEnEchec: status.numberRecordsFailed,
+    leadsAppliques,
   };
+}
+
+// Le job Bulk API est "OK pour l'upload" seulement s'il est intégralement terminé sans échec : un
+// `JobComplete` avec des enregistrements en échec mélange des lignes acceptées et refusées par
+// Salesforce, qu'on ne sait pas distinguer sans un appel Bulk API supplémentaire (failedResults) —
+// non fait pour l'instant, donc on n'applique rien à leads.json dans ce cas plutôt que de risquer
+// d'y écrire une valeur que Salesforce a refusée.
+function isFullySuccessful(status: BulkJobStatusLike): boolean {
+  return status.state === 'JobComplete' && (status.numberRecordsFailed ?? 0) === 0;
 }
 
 // Pousse le fichier upsync vers Salesforce via Bulk API 2.0 plutôt qu'un dépôt manuel dans le Data
@@ -121,6 +133,7 @@ export function createPushToSalesforceUseCase(deps: PushToSalesforceDeps) {
         const [describe, leadFields] = await Promise.all([deps.fetchReportDescribe(bearerToken), deps.fetchLeadFieldsMeta(bearerToken)]);
         const columnRules = buildColumnRules(describe, requiredApiNamesFrom(leadFields));
         const apiNamesByHeader = editableApiNamesByHeader(columnRules);
+        const editableHeaders = editableHeadersFrom(columnRules);
 
         const csv = await deps.readRunOutputFile(upsyncRunId, upsyncRun.output.fichier!);
         const bulkCsv = buildBulkCsv(csv, apiNamesByHeader);
@@ -130,7 +143,13 @@ export function createPushToSalesforceUseCase(deps: PushToSalesforceDeps) {
         await deps.closeJob(bearerToken, jobId);
         const status = await deps.getJobStatus(bearerToken, jobId);
 
-        await deps.completeRun(run.id, toResume(jobId, status), {});
+        let leadsAppliques = false;
+        if (isFullySuccessful(status)) {
+          await deps.applyUpsyncDiffToLeads(csv, editableHeaders);
+          leadsAppliques = true;
+        }
+
+        await deps.completeRun(run.id, toResume(jobId, status, leadsAppliques), {});
         await deps.logActivity({ nomActivite: 'push', nbLead: status.numberRecordsProcessed ?? undefined, date: new Date().toISOString() });
       } catch (error) {
         await deps.failRun(run.id, error instanceof Error ? error.message : 'Unknown error');
