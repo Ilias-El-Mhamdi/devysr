@@ -3,6 +3,7 @@ import type { RunStatut } from 'shared/types/run';
 import { useExportRuns, useStartExport } from '../../api/export';
 import { useImportRuns, useStartImport } from '../../api/import';
 import { useUpsyncRuns, useStartUpsync } from '../../api/upsync';
+import { usePushRuns, useStartPush, useRefreshPushStatus } from '../../api/push';
 import { useDeleteRun, runDownloadUrl } from '../../api/runs';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { toast } from '../../lib/toast';
@@ -47,6 +48,28 @@ function RunBadge({ statut, dateDebut }: { statut: RunStatut; dateDebut: string 
   );
 }
 
+function pushStateBadgeClasses(etatSalesforce: string): string {
+  if (etatSalesforce === 'JobComplete') return 'border-neon-green/40 text-neon-green bg-neon-green/10';
+  if (etatSalesforce === 'Failed' || etatSalesforce === 'Aborted') return 'border-neon-red/40 text-neon-red bg-neon-red/10';
+  return 'border-neon-amber/40 text-neon-amber bg-neon-amber/10 animate-pulse';
+}
+
+// Libellés compréhensibles plutôt que les noms d'état bruts de l'API Bulk — "UploadComplete" ne
+// veut rien dire pour un directeur (ça sonne comme "terminé" alors que Salesforce n'a pas encore
+// traité les enregistrements).
+function pushStateLabel(etatSalesforce: string): string {
+  switch (etatSalesforce) {
+    case 'JobComplete':
+      return 'Completed';
+    case 'Failed':
+      return 'Failed';
+    case 'Aborted':
+      return 'Aborted';
+    default:
+      return 'Working…';
+  }
+}
+
 export function DashboardPage() {
   const { data: exportRuns, isPending: isExportRunsPending } = useExportRuns();
   const startExport = useStartExport();
@@ -60,12 +83,18 @@ export function DashboardPage() {
   const startUpsync = useStartUpsync();
   const deleteUpsyncRun = useDeleteRun(['upsync-runs']);
 
-  const [runToDelete, setRunToDelete] = useState<{ id: string; kind: 'export' | 'import' | 'upsync' } | null>(null);
+  const { data: pushRuns, isPending: isPushRunsPending } = usePushRuns();
+  const startPush = useStartPush();
+  const refreshPushStatus = useRefreshPushStatus();
+  const deletePushRun = useDeleteRun(['push-runs']);
+
+  const [runToDelete, setRunToDelete] = useState<{ id: string; kind: 'export' | 'import' | 'upsync' | 'push' } | null>(null);
   const [nouveauxUniquement, setNouveauxUniquement] = useState(false);
 
   const hasExportInProgress = exportRuns?.some((run) => run.statut === 'en_cours') ?? false;
   const hasImportInProgress = importRuns?.some((run) => run.statut === 'en_cours') ?? false;
   const hasUpsyncInProgress = upsyncRuns?.some((run) => run.statut === 'en_cours') ?? false;
+  const hasPushInProgress = pushRuns?.some((run) => run.statut === 'en_cours') ?? false;
 
   const handleStartExport = () => {
     startExport.mutate(nouveauxUniquement, {
@@ -85,7 +114,19 @@ export function DashboardPage() {
     });
   };
 
-  const deleteMutations = { export: deleteExportRun, import: deleteImportRun, upsync: deleteUpsyncRun } as const;
+  const handleStartPush = (upsyncRunId: string) => {
+    startPush.mutate(upsyncRunId, {
+      onError: (error) => toast.error(error instanceof Error ? error.message : 'Upload failed to start.'),
+    });
+  };
+
+  const handleRefreshPushStatus = (pushRunId: string) => {
+    refreshPushStatus.mutate(pushRunId, {
+      onError: (error) => toast.error(error instanceof Error ? error.message : 'Failed to refresh status.'),
+    });
+  };
+
+  const deleteMutations = { export: deleteExportRun, import: deleteImportRun, upsync: deleteUpsyncRun, push: deletePushRun } as const;
 
   const handleConfirmDelete = () => {
     if (!runToDelete) return;
@@ -106,7 +147,7 @@ export function DashboardPage() {
         <div className="flex items-center justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold text-slate-100">Upsync</h2>
-            <p className="mt-1 text-xs text-slate-500">Scans every distributor Excel file and builds a file to drop into the Salesforce Import Wizard.</p>
+            <p className="mt-1 text-xs text-slate-500">Scans every distributor Excel file and builds a file to push to Salesforce.</p>
           </div>
           <button
             type="button"
@@ -149,6 +190,16 @@ export function DashboardPage() {
                 </div>
 
                 <div className="flex shrink-0 gap-2">
+                  {run.statut === 'succes' && (run.resume?.nbLeadModifies ?? 0) > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => handleStartPush(run.id)}
+                      disabled={hasPushInProgress || startPush.isPending}
+                      className="cursor-pointer rounded-md border border-neon-green/40 px-3 py-1.5 text-xs font-medium text-neon-green hover:bg-neon-green/10 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Upload
+                    </button>
+                  )}
                   {run.statut === 'succes' && run.output.fichier && (
                     <a
                       href={runDownloadUrl(run.id)}
@@ -162,6 +213,62 @@ export function DashboardPage() {
                       type="button"
                       onClick={() => setRunToDelete({ id: run.id, kind: 'upsync' })}
                       className="cursor-pointer rounded-md border border-slate-700 px-3 py-1.5 text-xs text-slate-400 hover:border-neon-red hover:text-neon-red"
+                    >
+                      Delete
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="glass-panel glow-cyan mt-8 rounded-2xl px-8 py-6">
+        <h2 className="text-lg font-semibold text-slate-100">Upload</h2>
+        <p className="mt-1 text-xs text-slate-500">Pushes an upsync file to Salesforce via Bulk API — updates leads by Lead ID.</p>
+
+        <div className="mt-6 flex flex-col gap-3">
+          {isPushRunsPending && <p className="text-sm text-slate-500">Loading uploads…</p>}
+          {!isPushRunsPending && pushRuns?.length === 0 && <p className="text-sm text-slate-500">No uploads yet.</p>}
+
+          {pushRuns?.map((run) => (
+            <div key={run.id} className="rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-3">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <RunBadge statut={run.statut} dateDebut={run.dateDebut} />
+                  {run.resume && (
+                    <div className="mt-1 flex items-center gap-2">
+                      <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${pushStateBadgeClasses(run.resume.etatSalesforce)}`}>
+                        {pushStateLabel(run.resume.etatSalesforce)}
+                      </span>
+                      {run.resume.nbEnregistresTraites !== null && (
+                        <span className="text-xs text-slate-500">
+                          {run.resume.nbEnregistresTraites} processed
+                          {!!run.resume.nbEnregistresEnEchec && `, ${run.resume.nbEnregistresEnEchec} failed`}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {run.erreur && <p className="mt-1 text-sm text-neon-red">{run.erreur}</p>}
+                </div>
+
+                <div className="flex shrink-0 gap-2">
+                  {run.statut === 'succes' && run.resume?.etatSalesforce !== 'JobComplete' && (
+                    <button
+                      type="button"
+                      onClick={() => handleRefreshPushStatus(run.id)}
+                      disabled={refreshPushStatus.isPending}
+                      className="cursor-pointer rounded-md border border-neon-cyan/40 px-3 py-1.5 text-xs font-medium text-neon-cyan hover:bg-neon-cyan/10 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Refresh status
+                    </button>
+                  )}
+                  {run.statut !== 'en_cours' && (
+                    <button
+                      type="button"
+                      onClick={() => setRunToDelete({ id: run.id, kind: 'push' })}
+                      className="cursor-pointer rounded-md border border-slate-700 px-3 py-1.5 text-xs whitespace-nowrap text-slate-400 hover:border-neon-red hover:text-neon-red"
                     >
                       Delete
                     </button>

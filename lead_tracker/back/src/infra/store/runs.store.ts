@@ -58,6 +58,19 @@ export async function failRun<T extends AnyRun>(runId: string, erreur: string): 
   return updated;
 }
 
+// Remplace `resume` sans toucher au statut/dateFin — utilisé pour rafraîchir un résultat qui
+// évolue de façon asynchrone côté Salesforce après la fin de notre propre run (ex. le job Bulk API
+// d'un push continue de traiter les enregistrements après qu'on l'a soumis).
+export async function patchRunResume<T extends AnyRun>(runId: string, resume: T['resume']): Promise<T> {
+  const run = await getRun<T>(runId);
+  if (!run) {
+    throw new Error(`Run not found: ${runId}`);
+  }
+  const updated = { ...run, resume } as T;
+  await writeRun(updated);
+  return updated;
+}
+
 export async function getRun<T extends AnyRun = AnyRun>(runId: string): Promise<T | null> {
   try {
     const raw = await fs.readFile(runJsonPath(runId), 'utf-8');

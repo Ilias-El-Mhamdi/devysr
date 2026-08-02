@@ -40,6 +40,10 @@ export interface ColumnRuleLike {
   picklistValues: string[];
   required: boolean;
   editable: boolean;
+  // Nom API du champ Lead (ex. "Status" pour la colonne affichée "Lead Status"), quand la colonne
+  // pointe directement sur Lead — null pour les colonnes cross-objet (Owner.Name, User.Alias...).
+  // Sert à reconstruire un CSV compatible Bulk API (qui attend des noms de champs, pas des labels).
+  apiName: string | null;
 }
 
 // Une colonne est éditable par le distributeur si elle correspond à un champ "métier" directement
@@ -74,7 +78,35 @@ export function buildColumnRules(describe: ReportDescribeLike, requiredApiNames:
     const required = apiName ? requiredApiNames.has(apiName) : false;
     const editable = isEditableColumn(info.entityColumnName);
 
-    result[info.label] = { picklistValues, required, editable };
+    result[info.label] = { picklistValues, required, editable, apiName };
+  }
+  return result;
+}
+
+// Ex. { "Lead Status": "Status", "Email": "Email" } — uniquement les colonnes éditables (les
+// seules qu'on pousse jamais vers Salesforce, cf. features/upsync.md).
+//
+// Piège découvert en test réel : pour les sous-champs d'un champ composé (ex. "First Name",
+// "Last Name", "Salutation" sur Lead), `entityColumnName` pointe vers le champ composé parent
+// ("Lead.Name"), pas vers le sous-champ réel — donc plusieurs colonnes du report se retrouvent
+// mappées vers le même `apiName` ("Name"), idem pour "Street"/"City"/"State"/... → "Address". Un
+// CSV avec des en-têtes en double n'est pas fiable pour l'API Bulk (Salesforce ne peut pas savoir
+// laquelle des colonnes en double fait foi). On exclut donc tout `apiName` qui apparaît plus d'une
+// fois : ces champs restent éditables dans l'Excel, juste pas poussés automatiquement pour
+// l'instant — cf. features/upsync.md.
+export function editableApiNamesByHeader(columnRules: Record<string, ColumnRuleLike>): Record<string, string> {
+  const editableEntries = Object.entries(columnRules).filter(([, rule]) => rule.editable && rule.apiName);
+
+  const occurrences = new Map<string, number>();
+  for (const [, rule] of editableEntries) {
+    occurrences.set(rule.apiName!, (occurrences.get(rule.apiName!) ?? 0) + 1);
+  }
+
+  const result: Record<string, string> = {};
+  for (const [header, rule] of editableEntries) {
+    if (occurrences.get(rule.apiName!) === 1) {
+      result[header] = rule.apiName!;
+    }
   }
   return result;
 }

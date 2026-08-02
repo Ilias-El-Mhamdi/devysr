@@ -1,4 +1,4 @@
-export type RunType = 'export' | 'import' | 'upsync';
+export type RunType = 'export' | 'import' | 'upsync' | 'push';
 
 export type RunStatut = 'en_cours' | 'succes' | 'echec';
 
@@ -70,4 +70,21 @@ export interface UpsyncRunResume {
 
 export type UpsyncRun = Run<UpsyncRunInput, UpsyncRunOutput, UpsyncRunResume>;
 
-export type AnyRun = ExportRun | ImportRun | UpsyncRun;
+export interface PushRunInput {
+  upsyncRunId: string;
+}
+
+export type PushRunOutput = Record<string, never>;
+
+export type PushJobEtat = 'Open' | 'UploadComplete' | 'InProgress' | 'JobComplete' | 'Failed' | 'Aborted';
+
+export interface PushRunResume {
+  jobId: string;
+  etatSalesforce: PushJobEtat;
+  nbEnregistresTraites: number | null;
+  nbEnregistresEnEchec: number | null;
+}
+
+export type PushRun = Run<PushRunInput, PushRunOutput, PushRunResume>;
+
+export type AnyRun = ExportRun | ImportRun | UpsyncRun | PushRun;

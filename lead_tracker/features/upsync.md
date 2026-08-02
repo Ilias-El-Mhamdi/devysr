@@ -101,3 +101,37 @@ Simulation d'une modification distributeur (email changé sur un lead, "Lead Own
 autre, directement dans le fichier Excel) → upsync sur 26 fichiers : 1 lead modifié correctement
 détecté et inclus dans le CSV avec sa nouvelle valeur, 1 anomalie détectée et exclue du fichier de
 sortie, comme attendu.
+
+## Push vers Salesforce (Bulk API 2.0)
+
+Section "Upload" séparée (même pattern qu'Export → Import), sur `back/src/core/usecases/pushToSalesforce.uc.ts`.
+Prend le CSV lisible produit par un run upsync et le pousse via Bulk API 2.0 (`back/src/infra/salesforce/bulkApi.ts`),
+même mécanisme sid-comme-bearer-token que le reste du projet.
+
+### Deux bugs trouvés en test réel (avant que le job n'atteigne enfin `JobComplete`)
+
+1. **`lineEnding` du job ne correspondait pas au CSV réel.** `shared/formatting/csv.ts` (`buildCsv`) sépare
+   toujours les lignes par `\r\n` (CRLF), mais le job Bulk était créé avec `lineEnding: 'LF'` → Salesforce
+   échouait à parser le CSV et le job tombait en `Failed` immédiatement (0 enregistrement traité). Fixé en
+   déclarant `lineEnding: 'CRLF'` à la création du job.
+
+2. **Champs composés Salesforce (`Name`, `Address`) génèrent des en-têtes CSV en double.** Le describe du
+   report expose `entityColumnName` = `"Lead.Name"` pour *chacun* des sous-champs "First Name", "Last Name",
+   "Salutation" (idem `"Lead.Address"` pour Street/City/State/Zip/Country) — pas le nom réel du sous-champ
+   API. `editableApiNamesByHeader()` (`back/src/core/domain/lead/columnRules.ts`) détecte maintenant les
+   `apiName` qui apparaissent plus d'une fois parmi les colonnes éditables et les exclut du mapping : ces
+   champs restent éditables dans l'Excel et visibles dans le CSV upsync téléchargeable, mais **ne sont pas
+   poussés automatiquement** vers Salesforce pour l'instant (pas de solution simple pour reconstruire les
+   vrais noms de sous-champs à partir du describe du report).
+
+3. **Cellules vides affichées `"-"` par le report Salesforce, reprises telles quelles.** Un report Salesforce
+   affiche une cellule vide comme le texte `"-"`, qui se retrouve donc littéralement dans le CSV d'export,
+   puis dans l'Excel distributeur. En repoussant une ligne modifiée vers Salesforce, ce `"-"` était renvoyé
+   tel quel pour *tous* les champs éditables de la ligne (pas seulement le champ réellement modifié) :
+   corruption silencieuse sur les champs texte (écrase la vraie valeur vide par le texte `"-"`), et échec de
+   **tout le job** sur les champs numériques (`AnnualRevenue` → `INVALID_FIELD: '-' is not valid for the type
+   xsd:double`). Fixé dans `buildBulkCsv()` (`pushToSalesforce.uc.ts`) : toute valeur strictement égale à
+   `"-"` est convertie en chaîne vide avant l'envoi.
+
+Test réel final (2 leads modifiés sur 2 distributeurs différents, avec des champs `"-"` non touchés dans la
+même ligne) → job `JobComplete`, 2 traités, 0 échec.
