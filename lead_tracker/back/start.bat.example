@@ -1,6 +1,31 @@
 @echo off
 REM Copier ce fichier en "start.bat" dans le dossier back/ (au meme niveau que le dossier dist/,
-REM pas dedans) et adapter le chemin ci-dessous.
+REM pas dedans).
+REM
+REM Variables commentees (REM set ...) = valeur par defaut deja appliquee par le code si absente,
+REM pas besoin de les decommenter sauf pour la changer. Decommenter = enlever le "REM " devant.
+
+REM --- Serveur ---
+REM set PORT=4000
+
+REM --- Stockage local (leads.json, distributeurs.json, runs/, observability/) ---
+REM defaut : dossier "data" a la racine du projet (a cote de back/ et front/)
+REM set DATA_DIR=C:\chemin\vers\data
+
+REM --- Fichiers Excel distributeurs (partage reseau) ---
+REM defaut : DATA_DIR\distributeurs -- A ADAPTER, c'est le chemin qui doit pointer vers le
+REM partage reseau reel de l'entreprise.
 set DISTRIBUTORS_DIR=\\serveur\partage\distributeurs
+
+REM --- Chrome dedie (session Salesforce) ---
+REM set CHROME_DEBUG_PORT=9222
+REM defaut : DATA_DIR\chrome-profile
+REM set CHROME_USER_DATA_DIR=C:\chemin\vers\profil-chrome
+
+REM --- Salesforce (report utilise pour l'import/verif) ---
+REM set SALESFORCE_REPORT_ID=00Ofj00000FxuDdEAJ
+REM set SALESFORCE_INSTANCE_HOST=orgfarm-fec657de9c-dev-ed.develop.my.salesforce.com
+REM set SALESFORCE_REPORT_URL=https://orgfarm-fec657de9c-dev-ed.develop.lightning.force.com/lightning/r/Report/00Ofj00000FxuDdEAJ/edit
+
 node dist\main.js
 pause
