@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { DashboardPage } from './pages/dashboard/DashboardPage';
+import { HistoryPage } from './pages/history/HistoryPage';
 import { SalesforceConnectionGate } from './components/SalesforceConnectionGate';
 import { ToastViewport } from './components/ToastViewport';
 import { VersionBadge } from './components/VersionBadge';
@@ -24,6 +25,7 @@ createRoot(rootElement).render(
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<DashboardPage />} />
+            <Route path="/history" element={<HistoryPage />} />
           </Routes>
         </BrowserRouter>
         <ToastViewport />
