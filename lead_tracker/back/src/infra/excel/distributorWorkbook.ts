@@ -58,11 +58,14 @@ function extractCreationDateMs(valeurs: Record<string, string>): number {
   return Number.isNaN(ms) ? 0 : ms;
 }
 
-// `worksheet.dataValidations.add(range, validation)` existe à l'exécution (une seule règle par
-// plage, cf. node_modules/exceljs/lib/doc/data-validations.js) mais n'est pas déclaré dans les
-// types fournis par la lib — d'où le cast.
+// `worksheet.dataValidations.add(range, validation)` et `.model` existent à l'exécution (cf.
+// node_modules/exceljs/lib/doc/data-validations.js : `{ model, add(address, v) { model[address] = v } }`)
+// mais ne sont pas déclarés dans les types fournis par la lib — d'où le cast.
 interface WorksheetWithDataValidations {
-  dataValidations: { add(range: string, validation: ExcelJS.DataValidation): void };
+  dataValidations: {
+    add(range: string, validation: ExcelJS.DataValidation): void;
+    model: Record<string, ExcelJS.DataValidation | undefined>;
+  };
 }
 
 // Une liste Excel passée en formule inline ("val1,val2,...") est limitée à 255 caractères — trop
@@ -132,6 +135,84 @@ function applyValidations(
       });
     }
   });
+}
+
+// Une adresse de dataValidation relue depuis le disque peut être une plage compacte ("L2:L5001",
+// telle qu'écrite par applyValidations) ou, dès qu'ExcelJS a lui-même relu ce fichier avant d'y
+// toucher (cas de tout fichier distributeur déjà existant), une cellule unique par ligne ("L2",
+// "L3", ...) — ExcelJS éclate les plages en adresses individuelles à la lecture (cf.
+// node_modules/exceljs/lib/xlsx/xform/sheet/data-validations-xform.js), sans les recompacter tant
+// qu'on ne réécrit pas. Les deux formes sont donc à reconnaître comme "colonne couverte".
+function missingDropdownHeaders(sheet: ExcelJS.Worksheet, headers: string[], columnRules: Record<string, ColumnRule>): string[] {
+  const headersWithDropdown = headers.filter((header) => (columnRules[header]?.picklistValues.length ?? 0) > 0);
+  if (headersWithDropdown.length === 0) {
+    return [];
+  }
+
+  const model = (sheet as unknown as WorksheetWithDataValidations).dataValidations.model ?? {};
+  const listRanges = Object.entries(model).filter(([, validation]) => validation?.type === 'list');
+
+  return headersWithDropdown.filter((header) => {
+    const index = headers.indexOf(header);
+    const colLetter = sheet.getColumn(index + 2).letter;
+    const columnAddressPattern = new RegExp(`^${colLetter}\\d+(:${colLetter}\\d+)?$`);
+    return !listRanges.some(([range]) => columnAddressPattern.test(range));
+  });
+}
+
+// Filet de sécurité : un fichier distributeur trouvé une fois avec ses dropdowns (validations
+// "list") disparus et des règles "obligatoire" corrompues (même formule recopiée sur toutes les
+// colonnes), sans qu'on ait pu reproduire la cause exacte malgré plusieurs dizaines de cycles
+// lecture/ajout/écriture simulés — mais la feuille cachée "Listes" (valeurs des picklists), elle,
+// survit intacte dans le cas observé. On la reconstruit donc à neuf et on réapplique proprement
+// toutes les validations plutôt que d'essayer de réparer l'existant (les adresses en cellules
+// individuelles issues de la lecture ne se substituent pas à la plage compacte qu'on réécrit — sans
+// les vider d'abord, les deux coexisteraient et pourraient se contredire). N'affecte que la feuille
+// "Listes" (masquée, pas de donnée lead) et les règles de validation de "Leads" — jamais les lignes
+// de données. Retourne true si une réparation a eu lieu (pour logguer, cf. appendLeadsToDistributorWorkbook).
+function repairDropdownsIfMissing(
+  workbook: ExcelJS.Workbook,
+  sheet: ExcelJS.Worksheet,
+  headers: string[],
+  columnRules: Record<string, ColumnRule>,
+): boolean {
+  if (missingDropdownHeaders(sheet, headers, columnRules).length === 0) {
+    return false;
+  }
+
+  if (workbook.getWorksheet(LISTES_SHEET)) {
+    workbook.removeWorksheet(LISTES_SHEET);
+  }
+  const listeRanges = buildListesSheet(workbook, columnRules);
+
+  (sheet as unknown as WorksheetWithDataValidations).dataValidations.model = {};
+  applyValidations(sheet, headers, columnRules, listeRanges);
+  return true;
+}
+
+// Vérification finale post-écriture : ne devrait jamais rien trouver après repairDropdownsIfMissing
+// (sinon la réparation elle-même a échoué, cas qu'on n'a jamais observé) — filet de sécurité ultime
+// avant d'envoyer un fichier potentiellement encore corrompu au distributeur, cf. § Gestion des
+// erreurs (CLAUDE.md) : message actionnable plutôt qu'une corruption silencieuse.
+async function assertDropdownsPresent(
+  filePath: string,
+  distributeurNom: string,
+  headers: string[],
+  columnRules: Record<string, ColumnRule>,
+): Promise<void> {
+  const check = new ExcelJS.Workbook();
+  await check.xlsx.readFile(filePath);
+  const sheet = check.getWorksheet(LEADS_SHEET);
+  if (!sheet) {
+    throw new Error(`Distributor file "${distributeurNom}.xlsx" has no "${LEADS_SHEET}" sheet after writing — the file appears corrupted.`);
+  }
+
+  const missing = missingDropdownHeaders(sheet, headers, columnRules);
+  if (missing.length > 0) {
+    throw new Error(
+      `Distributor file "${distributeurNom}.xlsx" is still missing the dropdown for: ${missing.join(', ')} after an automatic repair attempt — the file appears corrupted. Check it manually (or delete it to have it regenerated on the next import) before sending it to the distributor.`,
+    );
+  }
 }
 
 // Verrouille toutes les colonnes sauf celles marquées éditables (Email, Phone, Description, Lead
@@ -289,7 +370,12 @@ export async function appendLeadsToDistributorWorkbook(
   const allLeads = readAllLeadRows(leadsSheet, headers);
   await rebuildStatusSheets(sheets as Map<string, ExcelJS.Worksheet>, headers, allLeads);
 
+  if (repairDropdownsIfMissing(workbook, leadsSheet, headers, columnRules)) {
+    console.warn(`[distributorWorkbook] Repaired missing dropdown validations in "${distributeurNom}.xlsx" before writing.`);
+  }
+
   await workbook.xlsx.writeFile(filePath);
+  await assertDropdownsPresent(filePath, distributeurNom, headers, columnRules);
 }
 
 export interface DistributorLeadsSheet {
