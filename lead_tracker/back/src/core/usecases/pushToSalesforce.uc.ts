@@ -5,6 +5,7 @@ import {
   buildColumnRules,
   editableApiNamesByHeader,
   editableHeadersFrom,
+  hashExcludedHeadersFrom,
   requiredApiNamesFrom,
   type LeadFieldMetaLike,
   type ReportDescribeLike,
@@ -54,7 +55,7 @@ export interface PushToSalesforceDeps {
   uploadJobData: (bearerToken: string, jobId: string, csv: string) => Promise<void>;
   closeJob: (bearerToken: string, jobId: string) => Promise<void>;
   getJobStatus: (bearerToken: string, jobId: string) => Promise<BulkJobStatusLike>;
-  applyUpscanDiffToLeads: (csv: string, editableHeaders: ReadonlySet<string>) => Promise<number>;
+  applyUpscanDiffToLeads: (csv: string, editableHeaders: ReadonlySet<string>, hashExcludedHeaders: ReadonlySet<string>) => Promise<number>;
   logActivity: (activite: { nomActivite: string; nbLead?: number; date: string }) => Promise<void>;
 }
 
@@ -145,7 +146,7 @@ export function createPushToSalesforceUseCase(deps: PushToSalesforceDeps) {
 
         let leadsAppliques = false;
         if (isFullySuccessful(status)) {
-          await deps.applyUpscanDiffToLeads(csv, editableHeaders);
+          await deps.applyUpscanDiffToLeads(csv, editableHeaders, hashExcludedHeadersFrom(columnRules));
           leadsAppliques = true;
         }
 

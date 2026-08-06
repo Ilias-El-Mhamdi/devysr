@@ -16,6 +16,15 @@ const READ_ONLY_LEAD_API_NAMES = new Set([
   'EmailBouncedDate',
 ]);
 
+// Sous-ensemble de READ_ONLY_LEAD_API_NAMES qui change tout seul côté Salesforce entre deux
+// imports (visite du lead, bounce d'un email...), sans aucune action du distributeur — contrairement
+// à Id/CreatedDate qui sont figés à la création. Les garder dans le hash produirait un faux positif
+// d'anomalie UpScan ("champ verrouillé modifié dans Excel") à chaque fois que Salesforce fait
+// évoluer un de ces champs tout seul : l'Excel n'a pas bougé, c'est le hash de référence qui est
+// devenu obsolète. Cf. § Hash d'un lead (features.md) — cette liste doit rester documentée à la
+// main, ce n'est pas déductible de READ_ONLY_LEAD_API_NAMES.
+const VOLATILE_LEAD_API_NAMES = new Set(['LastModifiedDate', 'LastActivityDate', 'IsUnreadByOwner', 'EmailBouncedReason', 'EmailBouncedDate']);
+
 export interface ReportDescribeLike {
   reportMetadata: { detailColumns: string[] };
   reportExtendedMetadata: {
@@ -115,6 +124,20 @@ export function editableHeadersFrom(columnRules: Record<string, ColumnRuleLike>)
   return new Set(
     Object.entries(columnRules)
       .filter(([, rule]) => rule.editable)
+      .map(([header]) => header),
+  );
+}
+
+// Champs à exclure du hash (cf. lead.hash.ts) : les colonnes éditables par le distributeur (leur
+// modification est attendue, jamais une anomalie) + les colonnes verrouillées mais volatiles côté
+// Salesforce (VOLATILE_LEAD_API_NAMES) — distinct de editableHeadersFrom, qui ne sert lui qu'à
+// déterminer ce qui est effectivement écrit dans l'Excel/poussé vers Salesforce. Toujours calculé
+// au moment de l'import ET de la vérification à partir du même describe, pour rester cohérent avec
+// le hash de référence stocké dans leads.json.
+export function hashExcludedHeadersFrom(columnRules: Record<string, ColumnRuleLike>): Set<string> {
+  return new Set(
+    Object.entries(columnRules)
+      .filter(([, rule]) => rule.editable || (rule.apiName !== null && VOLATILE_LEAD_API_NAMES.has(rule.apiName)))
       .map(([header]) => header),
   );
 }

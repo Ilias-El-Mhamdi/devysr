@@ -21,8 +21,15 @@ export interface ApplyUpscanDiffToLeadsDeps {
 // immédiatement) et refreshPushStatus.uc (job encore InProgress au moment du push).
 // `editableHeaders` vient du même describe de report que celui utilisé pour construire le CSV Bulk
 // — seules ces colonnes sont écrites dans leads.json, jamais les colonnes en lecture seule.
+// `hashExcludedHeaders` (editable + verrouillées volatiles, cf. hashExcludedHeadersFrom) sert
+// uniquement au recalcul du hash ci-dessous — distinct d'`editableHeaders` pour ne pas rouvrir en
+// écriture des champs que Salesforce fait évoluer tout seul.
 export function createApplyUpscanDiffToLeadsUseCase(deps: ApplyUpscanDiffToLeadsDeps) {
-  return async function applyUpscanDiffToLeads(csv: string, editableHeaders: ReadonlySet<string>): Promise<number> {
+  return async function applyUpscanDiffToLeads(
+    csv: string,
+    editableHeaders: ReadonlySet<string>,
+    hashExcludedHeaders: ReadonlySet<string>,
+  ): Promise<number> {
     const { headers, rows } = parseSalesforceCsv(csv);
     const leadIdHeader = headers.find((header) => header.trim().toLowerCase() === LEAD_ID_HEADER.toLowerCase());
     if (!leadIdHeader) return 0;
@@ -51,7 +58,7 @@ export function createApplyUpscanDiffToLeadsUseCase(deps: ApplyUpscanDiffToLeads
       const lead: LeadRecord = {
         ...existant,
         valeurs: nouvellesValeurs,
-        hash: hashLeadValues(nouvellesValeurs, editableHeaders),
+        hash: hashLeadValues(nouvellesValeurs, hashExcludedHeaders),
         dateDerniereModification: new Date().toISOString(),
       };
       await deps.upsertLead(lead, changements);

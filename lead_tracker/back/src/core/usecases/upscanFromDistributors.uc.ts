@@ -5,6 +5,7 @@ import { hashLeadValues } from '../domain/lead/lead.hash';
 import {
   buildColumnRules,
   editableHeadersFrom,
+  hashExcludedHeadersFrom,
   requiredApiNamesFrom,
   type LeadFieldMetaLike,
   type ReportDescribeLike,
@@ -61,6 +62,7 @@ export function createUpscanFromDistributorsUseCase(deps: UpscanFromDistributors
         const columnRules = buildColumnRules(describe, requiredApiNamesFrom(leadFields));
         const editableHeaders = editableHeadersFrom(columnRules);
         const editableHeaderList = [...editableHeaders];
+        const hashExcludedHeaders = hashExcludedHeadersFrom(columnRules);
 
         const leadsExistants = await deps.getAllLeads();
         const distributeurs = await deps.listDistributorNames();
@@ -80,12 +82,12 @@ export function createUpscanFromDistributorsUseCase(deps: UpscanFromDistributors
               continue;
             }
 
-            const fileEditableHeaders = new Set(sheet.headers.filter((header) => editableHeaders.has(header)));
+            const fileHashExcludedHeaders = new Set(sheet.headers.filter((header) => hashExcludedHeaders.has(header)));
             const hashCheckValues: Record<string, string> = {};
             for (const header of sheet.headers) {
               hashCheckValues[header] = row.valeurs[header] ?? '';
             }
-            const recomputedHash = hashLeadValues(hashCheckValues, fileEditableHeaders);
+            const recomputedHash = hashLeadValues(hashCheckValues, fileHashExcludedHeaders);
             if (recomputedHash !== existant.hash) {
               anomalies.push({
                 leadId: row.id,

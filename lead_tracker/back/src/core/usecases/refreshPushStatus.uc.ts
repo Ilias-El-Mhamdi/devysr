@@ -2,6 +2,7 @@ import type { PushJobEtat, PushRun, PushRunResume, UpscanRun } from 'shared/type
 import {
   buildColumnRules,
   editableHeadersFrom,
+  hashExcludedHeadersFrom,
   requiredApiNamesFrom,
   type LeadFieldMetaLike,
   type ReportDescribeLike,
@@ -31,7 +32,7 @@ export interface RefreshPushStatusDeps {
   fetchReportDescribe: (bearerToken: string) => Promise<ReportDescribeLike>;
   fetchLeadFieldsMeta: (bearerToken: string) => Promise<LeadFieldMetaLike[]>;
   getJobStatus: (bearerToken: string, jobId: string) => Promise<BulkJobStatusLike>;
-  applyUpscanDiffToLeads: (csv: string, editableHeaders: ReadonlySet<string>) => Promise<number>;
+  applyUpscanDiffToLeads: (csv: string, editableHeaders: ReadonlySet<string>, hashExcludedHeaders: ReadonlySet<string>) => Promise<number>;
 }
 
 // Un `JobComplete` avec des enregistrements en échec mélange des lignes acceptées et refusées par
@@ -69,7 +70,7 @@ export function createRefreshPushStatusUseCase(deps: RefreshPushStatusDeps) {
         const [describe, leadFields] = await Promise.all([deps.fetchReportDescribe(bearerToken), deps.fetchLeadFieldsMeta(bearerToken)]);
         const columnRules = buildColumnRules(describe, requiredApiNamesFrom(leadFields));
         const csv = await deps.readRunOutputFile(run.input.upscanRunId, upscanRun.output.fichier);
-        await deps.applyUpscanDiffToLeads(csv, editableHeadersFrom(columnRules));
+        await deps.applyUpscanDiffToLeads(csv, editableHeadersFrom(columnRules), hashExcludedHeadersFrom(columnRules));
         leadsAppliques = true;
       }
     }

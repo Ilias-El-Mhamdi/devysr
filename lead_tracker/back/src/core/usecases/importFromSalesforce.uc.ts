@@ -6,7 +6,7 @@ import { hashLeadValues } from '../domain/lead/lead.hash';
 import { assignerDistributeur } from '../domain/distributeur/distributeurAssignment';
 import {
   buildColumnRules,
-  editableHeadersFrom,
+  hashExcludedHeadersFrom,
   requiredApiNamesFrom,
   type ColumnRuleLike,
   type LeadFieldMetaLike,
@@ -121,7 +121,7 @@ export function createImportFromSalesforceUseCase(deps: ImportFromSalesforceDeps
         const bearerToken = deps.toBearerToken(cookie);
         const [describe, leadFields] = await Promise.all([deps.fetchReportDescribe(bearerToken), deps.fetchLeadFieldsMeta(bearerToken)]);
         const columnRules = buildColumnRules(describe, requiredApiNamesFrom(leadFields));
-        const champsEditables = editableHeadersFrom(columnRules);
+        const champsExclusHash = hashExcludedHeadersFrom(columnRules);
 
         const leadsExistants = await deps.getAllLeads();
         const distributeurs = { ...(await deps.getAllDistributeurs()) };
@@ -137,7 +137,7 @@ export function createImportFromSalesforceUseCase(deps: ImportFromSalesforceDeps
           if (!id) continue;
 
           const existant = leadsExistants[id];
-          const hash = hashLeadValues(valeurs, champsEditables);
+          const hash = hashLeadValues(valeurs, champsExclusHash);
           const estNouveau = !existant;
           const changements = diffValeurs(existant?.valeurs, valeurs);
           const maintenant = new Date().toISOString();
