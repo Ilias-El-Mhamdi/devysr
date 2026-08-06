@@ -1,4 +1,4 @@
-import type { PushJobEtat, PushRun, PushRunInput, PushRunOutput, PushRunResume, RunType, UpsyncRun } from 'shared/types/run';
+import type { PushJobEtat, PushRun, PushRunInput, PushRunOutput, PushRunResume, RunType, UpscanRun } from 'shared/types/run';
 import { parseSalesforceCsv, csvRowsToLeadValues } from 'shared/parsing/salesforceCsv';
 import { buildCsv } from 'shared/formatting/csv';
 import {
@@ -17,7 +17,7 @@ const SALESFORCE_ID_HEADER = 'Id';
 // telle quelle dans le CSV d'export puis dans l'Excel distributeur. Ce n'est pas une vraie valeur,
 // juste un vide affiché : la renvoyer telle quelle à l'API Bulk écrirait le texte littéral "-" dans
 // un champ texte (corruption silencieuse) ou ferait échouer tout le job sur un champ numérique
-// (ex. AnnualRevenue → INVALID_FIELD, cf. features/upsync.md). On la traite comme une chaîne vide.
+// (ex. AnnualRevenue → INVALID_FIELD, cf. features/upscan.md). On la traite comme une chaîne vide.
 const BLANK_REPORT_PLACEHOLDER = '-';
 
 export class PushAlreadyInProgressError extends Error {
@@ -26,9 +26,9 @@ export class PushAlreadyInProgressError extends Error {
   }
 }
 
-export class UpsyncRunNotReadyError extends Error {
+export class UpscanRunNotReadyError extends Error {
   constructor() {
-    super('This upsync run cannot be used (not found, still in progress, failed, or has no modified leads).');
+    super('This upscan run cannot be used (not found, still in progress, failed, or has no modified leads).');
   }
 }
 
@@ -41,7 +41,7 @@ interface BulkJobStatusLike {
 
 export interface PushToSalesforceDeps {
   hasRunInProgress: (type: RunType) => Promise<boolean>;
-  getUpsyncRun: (runId: string) => Promise<UpsyncRun | null>;
+  getUpscanRun: (runId: string) => Promise<UpscanRun | null>;
   readRunOutputFile: (runId: string, fichier: string) => Promise<string>;
   createRun: (type: 'push', input: PushRunInput, emptyOutput: PushRunOutput) => Promise<PushRun>;
   completeRun: (runId: string, resume: PushRunResume, output: PushRunOutput) => Promise<PushRun>;
@@ -54,12 +54,12 @@ export interface PushToSalesforceDeps {
   uploadJobData: (bearerToken: string, jobId: string, csv: string) => Promise<void>;
   closeJob: (bearerToken: string, jobId: string) => Promise<void>;
   getJobStatus: (bearerToken: string, jobId: string) => Promise<BulkJobStatusLike>;
-  applyUpsyncDiffToLeads: (csv: string, editableHeaders: ReadonlySet<string>) => Promise<number>;
+  applyUpscanDiffToLeads: (csv: string, editableHeaders: ReadonlySet<string>) => Promise<number>;
   logActivity: (activite: { nomActivite: string; nbLead?: number; date: string }) => Promise<void>;
 }
 
 // Reconstruit un CSV compatible Bulk API à partir du CSV lisible (labels de report, "Lead ID")
-// produit par upsyncFromDistributors.uc.ts : Bulk API attend des noms de champs API ("Status", pas
+// produit par upscanFromDistributors.uc.ts : Bulk API attend des noms de champs API ("Status", pas
 // "Lead Status") et la colonne d'identité doit s'appeler "Id" (pas "Lead ID"). Toute colonne sans
 // mapping connu (champ composé exclu, cf. editableApiNamesByHeader) est retirée plutôt que
 // d'envoyer un en-tête invalide (un label de report n'est jamais un nom de champ Salesforce).
@@ -67,7 +67,7 @@ function buildBulkCsv(csv: string, apiNamesByHeader: Record<string, string>): st
   const { headers, rows } = parseSalesforceCsv(csv);
   const leadIdIndex = headers.findIndex((header) => header.trim().toLowerCase() === LEAD_ID_HEADER.toLowerCase());
   if (leadIdIndex === -1) {
-    throw new Error(`The "${LEAD_ID_HEADER}" column is missing from the upsync file.`);
+    throw new Error(`The "${LEAD_ID_HEADER}" column is missing from the upscan file.`);
   }
 
   const pushableHeaders = headers.filter((header, index) => index !== leadIdIndex && apiNamesByHeader[header]);
@@ -104,23 +104,23 @@ function isFullySuccessful(status: BulkJobStatusLike): boolean {
   return status.state === 'JobComplete' && (status.numberRecordsFailed ?? 0) === 0;
 }
 
-// Pousse le fichier upsync vers Salesforce via Bulk API 2.0 plutôt qu'un dépôt manuel dans le Data
+// Pousse le fichier upscan vers Salesforce via Bulk API 2.0 plutôt qu'un dépôt manuel dans le Data
 // Import Wizard — même mécanisme sid-comme-bearer-token que le reste, pas de Connected App OAuth,
 // et pas de limite basse en nombre de lignes (contrairement à l'API Analytics utilisée pour
-// l'export) — cf. features/upsync.md. Run à part entière (comme import référence un export via
-// exportRunId), pas un simple champ greffé sur le run upsync.
+// l'export) — cf. features/upscan.md. Run à part entière (comme import référence un export via
+// exportRunId), pas un simple champ greffé sur le run upscan.
 export function createPushToSalesforceUseCase(deps: PushToSalesforceDeps) {
-  return async function pushToSalesforce(upsyncRunId: string): Promise<string> {
+  return async function pushToSalesforce(upscanRunId: string): Promise<string> {
     if (await deps.hasRunInProgress('push')) {
       throw new PushAlreadyInProgressError();
     }
 
-    const upsyncRun = await deps.getUpsyncRun(upsyncRunId);
-    if (!upsyncRun || upsyncRun.statut !== 'succes' || !upsyncRun.output.fichier || !upsyncRun.resume || upsyncRun.resume.nbLeadModifies === 0) {
-      throw new UpsyncRunNotReadyError();
+    const upscanRun = await deps.getUpscanRun(upscanRunId);
+    if (!upscanRun || upscanRun.statut !== 'succes' || !upscanRun.output.fichier || !upscanRun.resume || upscanRun.resume.nbLeadModifies === 0) {
+      throw new UpscanRunNotReadyError();
     }
 
-    const run = await deps.createRun('push', { upsyncRunId }, {});
+    const run = await deps.createRun('push', { upscanRunId }, {});
 
     void (async () => {
       try {
@@ -135,7 +135,7 @@ export function createPushToSalesforceUseCase(deps: PushToSalesforceDeps) {
         const apiNamesByHeader = editableApiNamesByHeader(columnRules);
         const editableHeaders = editableHeadersFrom(columnRules);
 
-        const csv = await deps.readRunOutputFile(upsyncRunId, upsyncRun.output.fichier!);
+        const csv = await deps.readRunOutputFile(upscanRunId, upscanRun.output.fichier!);
         const bulkCsv = buildBulkCsv(csv, apiNamesByHeader);
 
         const jobId = await deps.createIngestJob(bearerToken);
@@ -145,7 +145,7 @@ export function createPushToSalesforceUseCase(deps: PushToSalesforceDeps) {
 
         let leadsAppliques = false;
         if (isFullySuccessful(status)) {
-          await deps.applyUpsyncDiffToLeads(csv, editableHeaders);
+          await deps.applyUpscanDiffToLeads(csv, editableHeaders);
           leadsAppliques = true;
         }
 

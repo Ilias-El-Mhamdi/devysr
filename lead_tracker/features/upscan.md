@@ -1,9 +1,9 @@
-# Upsync — remonter les modifications des distributeurs vers Salesforce
+# Upscan — remonter les modifications des distributeurs vers Salesforce
 
-Nouvelle section "Upsync" sur le dashboard : lit tous les fichiers Excel distributeurs, détecte
+Nouvelle section "Upscan" sur le dashboard : lit tous les fichiers Excel distributeurs, détecte
 les leads dont un champ éditable a changé depuis le dernier import, et produit un CSV prêt à être
 déposé dans le **Data Import Wizard** de Salesforce (mise à jour par "Lead ID"). Bouton
-"Run upsync", téléchargeable comme un export.
+"Run upscan", téléchargeable comme un export.
 
 ## Prérequis : correction d'un bug d'architecture Excel
 
@@ -41,7 +41,7 @@ ligne). Pour chaque lead :
    entre la valeur actuelle dans l'Excel et celle enregistrée dans `leads.json` → si au moins une
    diffère, le lead est inclus dans le fichier de sortie avec ses valeurs éditables **actuelles**.
 
-Upsync lui-même est **read-only vis-à-vis de `leads.json`** : il ne met rien à jour, il ne fait que
+Upscan lui-même est **read-only vis-à-vis de `leads.json`** : il ne met rien à jour, il ne fait que
 produire le CSV. La boucle se referme au moment du push (§ Push ci-dessous) : dès que le job Bulk
 API est intégralement terminé, les valeurs éditables confirmées par Salesforce sont appliquées à
 `leads.json` — pas besoin d'attendre le prochain cycle Export → Import complet pour voir l'état
@@ -74,40 +74,40 @@ directeur puisse aller vérifier manuellement le fichier concerné.
 back/src/
   core/
     domain/lead/columnRules.ts        ← déplacé depuis importFromSalesforce.uc.ts (partagé
-                                          import + upsync) : buildColumnRules, editableHeadersFrom,
+                                          import + upscan) : buildColumnRules, editableHeadersFrom,
                                           requiredApiNamesFrom
     usecases/
-      upsyncFromDistributors.uc.ts     ← orchestre : describe report → columnRules → parcourt
+      upscanFromDistributors.uc.ts     ← orchestre : describe report → columnRules → parcourt
                                           tous les distributeurs → diff → CSV
   infra/
     excel/distributorWorkbook.ts        ← + listDistributorNames, readDistributorLeadsSheet,
                                             rebuildStatusSheets (vues verrouillées)
     store/runs.store.ts                  ← + writeRunOutputFile
-    http/controllers/upsync.controller.ts ← POST /api/upsync
+    http/controllers/upscan.controller.ts ← POST /api/upscan
   wiring.ts                              ← câblage
 
 shared/
   formatting/csv.ts                     ← buildCsv déplacé depuis infra/salesforce/csv.ts (pur,
-                                            réutilisé par export ET upsync)
-  types/run.ts                          ← UpsyncRun, UpsyncRunResume, UpsyncAnomalie
+                                            réutilisé par export ET upscan)
+  types/run.ts                          ← UpscanRun, UpscanRunResume, UpscanAnomalie
 
 front/src/
-  api/upsync.ts                          ← useUpsyncRuns, useStartUpsync
-  pages/dashboard/DashboardPage.tsx       ← section "Upsync" (bouton, liste runs, anomalies,
+  api/upscan.ts                          ← useUpscanRuns, useStartUpscan
+  pages/dashboard/DashboardPage.tsx       ← section "Upscan" (bouton, liste runs, anomalies,
                                              téléchargement, suppression)
 ```
 
 ## Testé en conditions réelles
 
 Simulation d'une modification distributeur (email changé sur un lead, "Lead Owner" trafiqué sur un
-autre, directement dans le fichier Excel) → upsync sur 26 fichiers : 1 lead modifié correctement
+autre, directement dans le fichier Excel) → upscan sur 26 fichiers : 1 lead modifié correctement
 détecté et inclus dans le CSV avec sa nouvelle valeur, 1 anomalie détectée et exclue du fichier de
 sortie, comme attendu.
 
 ## Push vers Salesforce (Bulk API 2.0)
 
 Section "Upload" séparée (même pattern qu'Export → Import), sur `back/src/core/usecases/pushToSalesforce.uc.ts`.
-Prend le CSV lisible produit par un run upsync et le pousse via Bulk API 2.0 (`back/src/infra/salesforce/bulkApi.ts`),
+Prend le CSV lisible produit par un run upscan et le pousse via Bulk API 2.0 (`back/src/infra/salesforce/bulkApi.ts`),
 même mécanisme sid-comme-bearer-token que le reste du projet.
 
 ### Deux bugs trouvés en test réel (avant que le job n'atteigne enfin `JobComplete`)
@@ -122,7 +122,7 @@ même mécanisme sid-comme-bearer-token que le reste du projet.
    "Salutation" (idem `"Lead.Address"` pour Street/City/State/Zip/Country) — pas le nom réel du sous-champ
    API. `editableApiNamesByHeader()` (`back/src/core/domain/lead/columnRules.ts`) détecte maintenant les
    `apiName` qui apparaissent plus d'une fois parmi les colonnes éditables et les exclut du mapping : ces
-   champs restent éditables dans l'Excel et visibles dans le CSV upsync téléchargeable, mais **ne sont pas
+   champs restent éditables dans l'Excel et visibles dans le CSV upscan téléchargeable, mais **ne sont pas
    poussés automatiquement** vers Salesforce pour l'instant (pas de solution simple pour reconstruire les
    vrais noms de sous-champs à partir du describe du report).
 
@@ -141,8 +141,8 @@ même ligne) → job `JobComplete`, 2 traités, 0 échec.
 ## Application du diff dans `leads.json` (fermeture de la boucle)
 
 Dès qu'un job Bulk API est **intégralement traité** (`etatSalesforce === 'JobComplete'` et
-`nbEnregistresEnEchec === 0`), les valeurs éditables du CSV upsync poussé sont appliquées à
-`leads.json` (`applyUpsyncDiffToLeads.uc.ts`) : même mécanisme que l'import (hash recalculé,
+`nbEnregistresEnEchec === 0`), les valeurs éditables du CSV upscan poussé sont appliquées à
+`leads.json` (`applyUpscanDiffToLeads.uc.ts`) : même mécanisme que l'import (hash recalculé,
 `dateDerniereModification` mise à jour, une ligne par champ changé dans `leads_historique.jsonl`
 via `upsertLead`). Seules les colonnes éditables du describe de report courant sont écrites — jamais
 les colonnes en lecture seule.

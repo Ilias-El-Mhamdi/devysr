@@ -1,10 +1,10 @@
 import { Router } from 'express';
 import type { PushRunResume } from 'shared/types/run';
-import { PushAlreadyInProgressError, UpsyncRunNotReadyError } from '../../../core/usecases/pushToSalesforce.uc';
+import { PushAlreadyInProgressError, UpscanRunNotReadyError } from '../../../core/usecases/pushToSalesforce.uc';
 import { PushRunNotFoundError } from '../../../core/usecases/refreshPushStatus.uc';
 
 export interface PushControllerDeps {
-  pushToSalesforce: (upsyncRunId: string) => Promise<string>;
+  pushToSalesforce: (upscanRunId: string) => Promise<string>;
   refreshPushStatus: (pushRunId: string) => Promise<PushRunResume>;
 }
 
@@ -12,21 +12,21 @@ export function registerPushController(deps: PushControllerDeps): Router {
   const router = Router();
 
   router.post('/push', (req, res) => {
-    const upsyncRunId = (req.body as { upsyncRunId?: string } | undefined)?.upsyncRunId;
-    if (!upsyncRunId) {
-      res.status(400).json({ message: 'upsyncRunId is required.' });
+    const upscanRunId = (req.body as { upscanRunId?: string } | undefined)?.upscanRunId;
+    if (!upscanRunId) {
+      res.status(400).json({ message: 'upscanRunId is required.' });
       return;
     }
 
     deps
-      .pushToSalesforce(upsyncRunId)
+      .pushToSalesforce(upscanRunId)
       .then((runId) => res.status(202).json({ runId }))
       .catch((error: unknown) => {
         if (error instanceof PushAlreadyInProgressError) {
           res.status(409).json({ message: error.message });
           return;
         }
-        if (error instanceof UpsyncRunNotReadyError) {
+        if (error instanceof UpscanRunNotReadyError) {
           res.status(400).json({ message: error.message });
           return;
         }

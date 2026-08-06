@@ -17,7 +17,7 @@ function jobsUrl(path = ''): string {
 // Bulk API 2.0 : conçue pour les gros volumes (pas la limite de 2000 lignes de l'API Analytics
 // utilisée pour l'export, ni la limite de 200 enregistrements de l'API REST Composite) — la vraie
 // limite pratique est la taille du fichier (~150 Mo), largement au-dessus de notre échelle (cf.
-// features/upsync.md). Toujours le même sid-comme-bearer-token, pas de Connected App OAuth.
+// features/upscan.md). Toujours le même sid-comme-bearer-token, pas de Connected App OAuth.
 export async function createIngestJob(bearerToken: string): Promise<string> {
   const response = await fetch(jobsUrl(), {
     method: 'POST',

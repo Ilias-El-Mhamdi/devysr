@@ -1,5 +1,5 @@
 import type { LeadRecord } from 'shared/types/lead';
-import type { RunType, UpsyncAnomalie, UpsyncRun, UpsyncRunInput, UpsyncRunOutput, UpsyncRunResume } from 'shared/types/run';
+import type { RunType, UpscanAnomalie, UpscanRun, UpscanRunInput, UpscanRunOutput, UpscanRunResume } from 'shared/types/run';
 import { buildCsv } from 'shared/formatting/csv';
 import { hashLeadValues } from '../domain/lead/lead.hash';
 import {
@@ -10,12 +10,12 @@ import {
   type ReportDescribeLike,
 } from '../domain/lead/columnRules';
 
-const SALESFORCE_SESSION_EXPIRED_ERROR = 'Salesforce session expired. Open Firefox and sign back in to Salesforce before retrying the upsync.';
+const SALESFORCE_SESSION_EXPIRED_ERROR = 'Salesforce session expired. Open Firefox and sign back in to Salesforce before retrying the upscan.';
 const LEAD_ID_HEADER = 'Lead ID';
 
-export class UpsyncAlreadyInProgressError extends Error {
+export class UpscanAlreadyInProgressError extends Error {
   constructor() {
-    super('An upsync is already in progress.');
+    super('An upscan is already in progress.');
   }
 }
 
@@ -24,11 +24,11 @@ interface DistributorLeadsSheetLike {
   rows: { id: string; valeurs: Record<string, string> }[];
 }
 
-export interface UpsyncFromDistributorsDeps {
+export interface UpscanFromDistributorsDeps {
   hasRunInProgress: (type: RunType) => Promise<boolean>;
-  createRun: (type: 'upsync', input: UpsyncRunInput, emptyOutput: UpsyncRunOutput) => Promise<UpsyncRun>;
-  completeRun: (runId: string, resume: UpsyncRunResume, output: UpsyncRunOutput) => Promise<UpsyncRun>;
-  failRun: (runId: string, erreur: string) => Promise<UpsyncRun>;
+  createRun: (type: 'upscan', input: UpscanRunInput, emptyOutput: UpscanRunOutput) => Promise<UpscanRun>;
+  completeRun: (runId: string, resume: UpscanRunResume, output: UpscanRunOutput) => Promise<UpscanRun>;
+  failRun: (runId: string, erreur: string) => Promise<UpscanRun>;
   writeRunOutputFile: (runId: string, fichier: string, content: string) => Promise<void>;
   getAllLeads: () => Promise<Record<string, LeadRecord>>;
   getSalesforceSessionCookie: () => Promise<string | null>;
@@ -42,13 +42,13 @@ export interface UpsyncFromDistributorsDeps {
 
 // Démarre le run et retourne son id immédiatement ; la lecture de potentiellement 50 fichiers Excel
 // se termine en tâche de fond (cf. règle CLAUDE.md sur les actions longues).
-export function createUpsyncFromDistributorsUseCase(deps: UpsyncFromDistributorsDeps) {
-  return async function upsyncFromDistributors(): Promise<string> {
-    if (await deps.hasRunInProgress('upsync')) {
-      throw new UpsyncAlreadyInProgressError();
+export function createUpscanFromDistributorsUseCase(deps: UpscanFromDistributorsDeps) {
+  return async function upscanFromDistributors(): Promise<string> {
+    if (await deps.hasRunInProgress('upscan')) {
+      throw new UpscanAlreadyInProgressError();
     }
 
-    const run = await deps.createRun('upsync', {}, { fichier: null });
+    const run = await deps.createRun('upscan', {}, { fichier: null });
 
     void (async () => {
       try {
@@ -65,7 +65,7 @@ export function createUpsyncFromDistributorsUseCase(deps: UpsyncFromDistributors
         const leadsExistants = await deps.getAllLeads();
         const distributeurs = await deps.listDistributorNames();
 
-        const anomalies: UpsyncAnomalie[] = [];
+        const anomalies: UpscanAnomalie[] = [];
         const modifiedRows: string[][] = [];
         const distributeursImpactes = new Set<string>();
 
@@ -104,16 +104,16 @@ export function createUpsyncFromDistributorsUseCase(deps: UpsyncFromDistributors
         }
 
         const csv = buildCsv([LEAD_ID_HEADER, ...editableHeaderList], modifiedRows);
-        await deps.writeRunOutputFile(run.id, 'upsync.csv', csv);
+        await deps.writeRunOutputFile(run.id, 'upscan.csv', csv);
 
-        const resume: UpsyncRunResume = {
+        const resume: UpscanRunResume = {
           nbFichiersLus: distributeurs.length,
           nbLeadModifies: modifiedRows.length,
           nbDistributeursImpactes: distributeursImpactes.size,
           anomalies,
         };
-        await deps.completeRun(run.id, resume, { fichier: 'upsync.csv' });
-        await deps.logActivity({ nomActivite: 'upsync', nbLead: resume.nbLeadModifies, date: new Date().toISOString() });
+        await deps.completeRun(run.id, resume, { fichier: 'upscan.csv' });
+        await deps.logActivity({ nomActivite: 'upscan', nbLead: resume.nbLeadModifies, date: new Date().toISOString() });
       } catch (error) {
         await deps.failRun(run.id, error instanceof Error ? error.message : 'Unknown error');
       }

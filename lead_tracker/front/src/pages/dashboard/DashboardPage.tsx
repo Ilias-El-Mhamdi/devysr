@@ -3,7 +3,7 @@ import type { RunStatut } from 'shared/types/run';
 import { useExportRuns, useStartExport } from '../../api/export';
 import { useImportRuns, useStartImport } from '../../api/import';
 import { useVerifyRuns, useStartVerify } from '../../api/verify';
-import { useUpsyncRuns, useStartUpsync } from '../../api/upsync';
+import { useUpscanRuns, useStartUpscan } from '../../api/upscan';
 import { usePushRuns, useStartPush, useRefreshPushStatus } from '../../api/push';
 import { useDeleteRun, runDownloadUrl } from '../../api/runs';
 import { ConfirmModal } from '../../components/ConfirmModal';
@@ -80,9 +80,9 @@ export function DashboardPage() {
   const startImport = useStartImport();
   const deleteImportRun = useDeleteRun(['import-runs']);
 
-  const { data: upsyncRuns, isPending: isUpsyncRunsPending } = useUpsyncRuns();
-  const startUpsync = useStartUpsync();
-  const deleteUpsyncRun = useDeleteRun(['upsync-runs']);
+  const { data: upscanRuns, isPending: isUpscanRunsPending } = useUpscanRuns();
+  const startUpscan = useStartUpscan();
+  const deleteUpscanRun = useDeleteRun(['upscan-runs']);
 
   const { data: pushRuns, isPending: isPushRunsPending } = usePushRuns();
   const startPush = useStartPush();
@@ -93,12 +93,12 @@ export function DashboardPage() {
   const startVerify = useStartVerify();
   const deleteVerifyRun = useDeleteRun(['verify-runs']);
 
-  const [runToDelete, setRunToDelete] = useState<{ id: string; kind: 'export' | 'import' | 'upsync' | 'push' | 'verify' } | null>(null);
+  const [runToDelete, setRunToDelete] = useState<{ id: string; kind: 'export' | 'import' | 'upscan' | 'push' | 'verify' } | null>(null);
   const [nouveauxUniquement, setNouveauxUniquement] = useState(false);
 
   const hasExportInProgress = exportRuns?.some((run) => run.statut === 'en_cours') ?? false;
   const hasImportInProgress = importRuns?.some((run) => run.statut === 'en_cours') ?? false;
-  const hasUpsyncInProgress = upsyncRuns?.some((run) => run.statut === 'en_cours') ?? false;
+  const hasUpscanInProgress = upscanRuns?.some((run) => run.statut === 'en_cours') ?? false;
   const hasPushInProgress = pushRuns?.some((run) => run.statut === 'en_cours') ?? false;
   const hasVerifyInProgress = verifyRuns?.some((run) => run.statut === 'en_cours') ?? false;
 
@@ -114,14 +114,14 @@ export function DashboardPage() {
     });
   };
 
-  const handleStartUpsync = () => {
-    startUpsync.mutate(undefined, {
-      onError: (error) => toast.error(error instanceof Error ? error.message : 'Upsync failed to start.'),
+  const handleStartUpscan = () => {
+    startUpscan.mutate(undefined, {
+      onError: (error) => toast.error(error instanceof Error ? error.message : 'Upscan failed to start.'),
     });
   };
 
-  const handleStartPush = (upsyncRunId: string) => {
-    startPush.mutate(upsyncRunId, {
+  const handleStartPush = (upscanRunId: string) => {
+    startPush.mutate(upscanRunId, {
       onError: (error) => toast.error(error instanceof Error ? error.message : 'Upload failed to start.'),
     });
   };
@@ -141,7 +141,7 @@ export function DashboardPage() {
   const deleteMutations = {
     export: deleteExportRun,
     import: deleteImportRun,
-    upsync: deleteUpsyncRun,
+    upscan: deleteUpscanRun,
     push: deletePushRun,
     verify: deleteVerifyRun,
   } as const;
@@ -164,24 +164,24 @@ export function DashboardPage() {
       <section className="glass-panel glow-violet mt-8 rounded-2xl px-8 py-6">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h2 className="text-lg font-semibold text-slate-100">Upsync</h2>
+            <h2 className="text-lg font-semibold text-slate-100">UpScan</h2>
             <p className="mt-1 text-xs text-slate-500">Scans every distributor Excel file and builds a file to push to Salesforce.</p>
           </div>
           <button
             type="button"
-            onClick={handleStartUpsync}
-            disabled={hasUpsyncInProgress || startUpsync.isPending}
+            onClick={handleStartUpscan}
+            disabled={hasUpscanInProgress || startUpscan.isPending}
             className="cursor-pointer rounded-md bg-neon-violet/90 px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-neon-violet disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {hasUpsyncInProgress ? 'Upsync in progress…' : 'Run upsync'}
+            {hasUpscanInProgress ? 'Upscan in progress…' : 'Run upscan'}
           </button>
         </div>
 
         <div className="mt-6 flex flex-col gap-3">
-          {isUpsyncRunsPending && <p className="text-sm text-slate-500">Loading upsyncs…</p>}
-          {!isUpsyncRunsPending && upsyncRuns?.length === 0 && <p className="text-sm text-slate-500">No upsyncs yet.</p>}
+          {isUpscanRunsPending && <p className="text-sm text-slate-500">Loading upscans…</p>}
+          {!isUpscanRunsPending && upscanRuns?.length === 0 && <p className="text-sm text-slate-500">No upscans yet.</p>}
 
-          {upsyncRuns?.map((run) => (
+          {upscanRuns?.map((run) => (
             <div key={run.id} className="rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-3">
               <div className="flex items-center justify-between gap-4">
                 <div>
@@ -229,7 +229,7 @@ export function DashboardPage() {
                   {run.statut !== 'en_cours' && (
                     <button
                       type="button"
-                      onClick={() => setRunToDelete({ id: run.id, kind: 'upsync' })}
+                      onClick={() => setRunToDelete({ id: run.id, kind: 'upscan' })}
                       className="cursor-pointer rounded-md border border-slate-700 px-3 py-1.5 text-xs text-slate-400 hover:border-neon-red hover:text-neon-red"
                     >
                       Delete
@@ -244,7 +244,7 @@ export function DashboardPage() {
 
       <section className="glass-panel glow-cyan mt-8 rounded-2xl px-8 py-6">
         <h2 className="text-lg font-semibold text-slate-100">Upload</h2>
-        <p className="mt-1 text-xs text-slate-500">Pushes an upsync file to Salesforce via Bulk API — updates leads by Lead ID.</p>
+        <p className="mt-1 text-xs text-slate-500">Pushes an upscan file to Salesforce via Bulk API — updates leads by Lead ID.</p>
 
         <div className="mt-6 flex flex-col gap-3">
           {isPushRunsPending && <p className="text-sm text-slate-500">Loading uploads…</p>}

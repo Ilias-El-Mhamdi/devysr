@@ -65,8 +65,8 @@ function isEditableColumn(entityColumnName: string | undefined): boolean {
 // describe de Lead — les en-têtes du report peuvent être renommés par son auteur (ex. "Company /
 // Account" pour le champ "Company") et un matching par label peut rater silencieusement une
 // colonne. `entityColumnName` donne le champ réel, fiable, indépendamment du renommage.
-// Calcul pur (aucune I/O) : partagé entre l'import (construction de l'Excel) et l'upsync
-// (détection des modifications) — cf. features/upsync.md.
+// Calcul pur (aucune I/O) : partagé entre l'import (construction de l'Excel) et l'upscan
+// (détection des modifications) — cf. features/upscan.md.
 export function buildColumnRules(describe: ReportDescribeLike, requiredApiNames: Set<string>): Record<string, ColumnRuleLike> {
   const result: Record<string, ColumnRuleLike> = {};
   for (const key of describe.reportMetadata.detailColumns) {
@@ -84,7 +84,7 @@ export function buildColumnRules(describe: ReportDescribeLike, requiredApiNames:
 }
 
 // Ex. { "Lead Status": "Status", "Email": "Email" } — uniquement les colonnes éditables (les
-// seules qu'on pousse jamais vers Salesforce, cf. features/upsync.md).
+// seules qu'on pousse jamais vers Salesforce, cf. features/upscan.md).
 //
 // Piège découvert en test réel : pour les sous-champs d'un champ composé (ex. "First Name",
 // "Last Name", "Salutation" sur Lead), `entityColumnName` pointe vers le champ composé parent
@@ -93,7 +93,7 @@ export function buildColumnRules(describe: ReportDescribeLike, requiredApiNames:
 // CSV avec des en-têtes en double n'est pas fiable pour l'API Bulk (Salesforce ne peut pas savoir
 // laquelle des colonnes en double fait foi). On exclut donc tout `apiName` qui apparaît plus d'une
 // fois : ces champs restent éditables dans l'Excel, juste pas poussés automatiquement pour
-// l'instant — cf. features/upsync.md.
+// l'instant — cf. features/upscan.md.
 export function editableApiNamesByHeader(columnRules: Record<string, ColumnRuleLike>): Record<string, string> {
   const editableEntries = Object.entries(columnRules).filter(([, rule]) => rule.editable && rule.apiName);
 

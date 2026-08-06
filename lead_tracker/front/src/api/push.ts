@@ -19,11 +19,11 @@ export function usePushRuns() {
   });
 }
 
-async function startPush(upsyncRunId: string): Promise<{ runId: string }> {
+async function startPush(upscanRunId: string): Promise<{ runId: string }> {
   const res = await fetch('/api/push', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ upsyncRunId }),
+    body: JSON.stringify({ upscanRunId }),
   });
   if (!res.ok) {
     throw new Error(await readErrorMessage(res, `Failed to start push: ${res.status}`));

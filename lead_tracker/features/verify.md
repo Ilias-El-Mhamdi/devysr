@@ -2,17 +2,17 @@
 
 Bouton "Verify" sur le dashboard, à côté de "Import" sur chaque run d'export réussi. Lance un
 nouveau run (type `verify`) qui compare `leads.json` à l'export choisi, uniquement sur les colonnes
-**éditables par le distributeur** (mêmes règles que l'upsync et l'import,
+**éditables par le distributeur** (mêmes règles que l'upscan et l'import,
 `core/domain/lead/columnRules.ts`) — pas les colonnes en lecture seule, dont la fraîcheur est déjà
 garantie par le prochain import complet.
 
 ## Pourquoi
 
 Un écart détecté ici signale soit :
-- un push (§ Upload, cf. `features/upsync.md`) qui n'a pas (encore) été appliqué à `leads.json`
+- un push (§ Upload, cf. `features/upscan.md`) qui n'a pas (encore) été appliqué à `leads.json`
   (job pas encore `JobComplete`, ou terminé avec des échecs — cf. § Application du diff dans
-  `leads.json` de `features/upsync.md`) ;
-- une modification faite directement dans Salesforce en dehors du cycle upsync → push.
+  `leads.json` de `features/upscan.md`) ;
+- une modification faite directement dans Salesforce en dehors du cycle upscan → push.
 
 ## Détection
 
@@ -22,7 +22,7 @@ comparaison des valeurs actuelles de l'export avec `leads.json` sur les colonnes
 noms de colonnes, report label). Au moins une différence → le lead est inclus dans le rapport et
 dans le fichier de sortie.
 
-Verify est **read-only vis-à-vis de `leads.json`** (comme l'upsync) : il ne corrige rien lui-même,
+Verify est **read-only vis-à-vis de `leads.json`** (comme l'upscan) : il ne corrige rien lui-même,
 il ne fait que rapporter les écarts.
 
 ## Rapport du run

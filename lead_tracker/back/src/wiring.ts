@@ -1,7 +1,7 @@
 import express, { type Express } from 'express';
 import { registerExportController } from './infra/http/controllers/export.controller';
 import { registerImportController } from './infra/http/controllers/import.controller';
-import { registerUpsyncController } from './infra/http/controllers/upsync.controller';
+import { registerUpscanController } from './infra/http/controllers/upscan.controller';
 import { registerPushController } from './infra/http/controllers/push.controller';
 import { registerRunsController } from './infra/http/controllers/runs.controller';
 import { registerSalesforceSessionController } from './infra/http/controllers/salesforceSession.controller';
@@ -9,10 +9,10 @@ import { registerVerifyController } from './infra/http/controllers/verify.contro
 import { registerVersionController } from './infra/http/controllers/version.controller';
 import { createExportToSalesforceUseCase } from './core/usecases/exportToSalesforce.uc';
 import { createImportFromSalesforceUseCase } from './core/usecases/importFromSalesforce.uc';
-import { createUpsyncFromDistributorsUseCase } from './core/usecases/upsyncFromDistributors.uc';
+import { createUpscanFromDistributorsUseCase } from './core/usecases/upscanFromDistributors.uc';
 import { createPushToSalesforceUseCase } from './core/usecases/pushToSalesforce.uc';
 import { createRefreshPushStatusUseCase } from './core/usecases/refreshPushStatus.uc';
-import { createApplyUpsyncDiffToLeadsUseCase } from './core/usecases/applyUpsyncDiffToLeads.uc';
+import { createApplyUpscanDiffToLeadsUseCase } from './core/usecases/applyUpscanDiffToLeads.uc';
 import { createVerifyUseCase } from './core/usecases/verify.uc';
 import { createCheckSalesforceSessionUseCase } from './core/usecases/checkSalesforceSession.uc';
 import {
@@ -75,7 +75,7 @@ export function buildApp(): Express {
     logActivity,
   });
 
-  const upsyncFromDistributors = createUpsyncFromDistributorsUseCase({
+  const upscanFromDistributors = createUpscanFromDistributorsUseCase({
     hasRunInProgress,
     createRun,
     completeRun,
@@ -91,14 +91,14 @@ export function buildApp(): Express {
     logActivity,
   });
 
-  const applyUpsyncDiffToLeads = createApplyUpsyncDiffToLeadsUseCase({
+  const applyUpscanDiffToLeads = createApplyUpscanDiffToLeadsUseCase({
     getAllLeads,
     upsertLead,
   });
 
   const pushToSalesforce = createPushToSalesforceUseCase({
     hasRunInProgress,
-    getUpsyncRun: getRun,
+    getUpscanRun: getRun,
     readRunOutputFile,
     createRun,
     completeRun,
@@ -111,13 +111,13 @@ export function buildApp(): Express {
     uploadJobData,
     closeJob,
     getJobStatus,
-    applyUpsyncDiffToLeads,
+    applyUpscanDiffToLeads,
     logActivity,
   });
 
   const refreshPushStatus = createRefreshPushStatusUseCase({
     getRun,
-    getUpsyncRun: getRun,
+    getUpscanRun: getRun,
     readRunOutputFile,
     patchRunResume,
     getSalesforceSessionCookie,
@@ -125,7 +125,7 @@ export function buildApp(): Express {
     fetchReportDescribe,
     fetchLeadFieldsMeta,
     getJobStatus,
-    applyUpsyncDiffToLeads,
+    applyUpscanDiffToLeads,
   });
 
   const checkSalesforceSession = createCheckSalesforceSessionUseCase({
@@ -151,7 +151,7 @@ export function buildApp(): Express {
 
   app.use('/api', registerExportController({ exportToSalesforce }));
   app.use('/api', registerImportController({ importFromSalesforce }));
-  app.use('/api', registerUpsyncController({ upsyncFromDistributors }));
+  app.use('/api', registerUpscanController({ upscanFromDistributors }));
   app.use('/api', registerPushController({ pushToSalesforce, refreshPushStatus }));
   app.use('/api', registerRunsController());
   app.use('/api', registerSalesforceSessionController({ checkSalesforceSession }));

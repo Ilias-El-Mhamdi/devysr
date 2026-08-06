@@ -10,19 +10,19 @@ interface ChampChange {
   apres: string;
 }
 
-export interface ApplyUpsyncDiffToLeadsDeps {
+export interface ApplyUpscanDiffToLeadsDeps {
   getAllLeads: () => Promise<Record<string, LeadRecord>>;
   upsertLead: (lead: LeadRecord, changements: ChampChange[]) => Promise<void>;
 }
 
-// Ferme la boucle upsync → Salesforce → leads.json dès qu'un push est intégralement traité
+// Ferme la boucle upscan → Salesforce → leads.json dès qu'un push est intégralement traité
 // (`etatSalesforce === 'JobComplete'` et 0 échec), au lieu d'attendre le prochain cycle Export →
-// Import (cf. features/upsync.md § Push). Appliqué par pushToSalesforce.uc (job terminé
+// Import (cf. features/upscan.md § Push). Appliqué par pushToSalesforce.uc (job terminé
 // immédiatement) et refreshPushStatus.uc (job encore InProgress au moment du push).
 // `editableHeaders` vient du même describe de report que celui utilisé pour construire le CSV Bulk
 // — seules ces colonnes sont écrites dans leads.json, jamais les colonnes en lecture seule.
-export function createApplyUpsyncDiffToLeadsUseCase(deps: ApplyUpsyncDiffToLeadsDeps) {
-  return async function applyUpsyncDiffToLeads(csv: string, editableHeaders: ReadonlySet<string>): Promise<number> {
+export function createApplyUpscanDiffToLeadsUseCase(deps: ApplyUpscanDiffToLeadsDeps) {
+  return async function applyUpscanDiffToLeads(csv: string, editableHeaders: ReadonlySet<string>): Promise<number> {
     const { headers, rows } = parseSalesforceCsv(csv);
     const leadIdHeader = headers.find((header) => header.trim().toLowerCase() === LEAD_ID_HEADER.toLowerCase());
     if (!leadIdHeader) return 0;

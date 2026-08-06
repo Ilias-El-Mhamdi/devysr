@@ -1,4 +1,4 @@
-export type RunType = 'export' | 'import' | 'upsync' | 'push' | 'verify';
+export type RunType = 'export' | 'import' | 'upscan' | 'push' | 'verify';
 
 export type RunStatut = 'en_cours' | 'succes' | 'echec';
 
@@ -49,29 +49,29 @@ export interface ImportRunResume {
 
 export type ImportRun = Run<ImportRunInput, ImportRunOutput, ImportRunResume>;
 
-export type UpsyncRunInput = Record<string, never>;
+export type UpscanRunInput = Record<string, never>;
 
-export interface UpsyncRunOutput {
+export interface UpscanRunOutput {
   fichier: string | null;
 }
 
-export interface UpsyncAnomalie {
+export interface UpscanAnomalie {
   leadId: string;
   distributeur: string;
   raison: string;
 }
 
-export interface UpsyncRunResume {
+export interface UpscanRunResume {
   nbFichiersLus: number;
   nbLeadModifies: number;
   nbDistributeursImpactes: number;
-  anomalies: UpsyncAnomalie[];
+  anomalies: UpscanAnomalie[];
 }
 
-export type UpsyncRun = Run<UpsyncRunInput, UpsyncRunOutput, UpsyncRunResume>;
+export type UpscanRun = Run<UpscanRunInput, UpscanRunOutput, UpscanRunResume>;
 
 export interface PushRunInput {
-  upsyncRunId: string;
+  upscanRunId: string;
 }
 
 export type PushRunOutput = Record<string, never>;
@@ -84,7 +84,7 @@ export interface PushRunResume {
   nbEnregistresTraites: number | null;
   nbEnregistresEnEchec: number | null;
   // true une fois que les valeurs éditables confirmées par Salesforce (JobComplete, 0 échec) ont
-  // été appliquées à leads.json — cf. applyUpsyncDiffToLeads.uc.ts.
+  // été appliquées à leads.json — cf. applyUpscanDiffToLeads.uc.ts.
   leadsAppliques: boolean;
 }
 
@@ -108,4 +108,4 @@ export interface VerifyRunResume {
 
 export type VerifyRun = Run<VerifyRunInput, VerifyRunOutput, VerifyRunResume>;
 
-export type AnyRun = ExportRun | ImportRun | UpsyncRun | PushRun | VerifyRun;
+export type AnyRun = ExportRun | ImportRun | UpscanRun | PushRun | VerifyRun;

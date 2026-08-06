@@ -42,11 +42,11 @@ export interface VerifyDeps {
 }
 
 // Vérifie que leads.json est à jour avec un export Salesforce donné, sur les colonnes éditables
-// par le distributeur uniquement (mêmes règles que l'upsync/l'import, `columnRules.ts`) — pas les
+// par le distributeur uniquement (mêmes règles que l'upscan/l'import, `columnRules.ts`) — pas les
 // colonnes en lecture seule, dont la fraîcheur est déjà garantie par le prochain import complet.
 // Un écart signale soit un push qui n'a pas (encore) été appliqué à leads.json, soit une
-// modification faite directement dans Salesforce en dehors du cycle upsync → push.
-// Lecture seule vis-à-vis de leads.json (comme l'upsync) : ce usecase ne corrige rien lui-même,
+// modification faite directement dans Salesforce en dehors du cycle upscan → push.
+// Lecture seule vis-à-vis de leads.json (comme l'upscan) : ce usecase ne corrige rien lui-même,
 // il ne fait que rapporter les écarts.
 export function createVerifyUseCase(deps: VerifyDeps) {
   return async function verify(exportRunId: string): Promise<string> {

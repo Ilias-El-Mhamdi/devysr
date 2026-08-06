@@ -225,7 +225,7 @@ function readAllLeadRows(sheet: ExcelJS.Worksheet, headers: string[]): LeadRow[]
 }
 
 // Reconstruit entièrement les 3 feuilles de statut à partir du contenu actuel de "Leads" — jamais
-// une copie indépendante : une seule source de vérité par fichier (cf. features/upsync.md).
+// une copie indépendante : une seule source de vérité par fichier (cf. features/upscan.md).
 async function rebuildStatusSheets(sheets: Map<string, ExcelJS.Worksheet>, headers: string[], allLeads: LeadRow[]): Promise<void> {
   const statutHeader = findStatutHeader(headers);
   const parStatut = new Map<string, LeadRow[]>();
@@ -297,7 +297,7 @@ export interface DistributorLeadsSheet {
   rows: LeadRow[];
 }
 
-// Noms de fichiers présents dans data/distributeurs/ (sans l'extension) — utilisé par Upsync pour
+// Noms de fichiers présents dans data/distributeurs/ (sans l'extension) — utilisé par Upscan pour
 // parcourir tous les distributeurs sans dépendre de distributeurs.json (un fichier peut exister
 // même si son entrée a été renommée/modifiée côté JSON).
 export async function listDistributorNames(): Promise<string[]> {
@@ -308,7 +308,7 @@ export async function listDistributorNames(): Promise<string[]> {
 
 // Lit la feuille "Leads" (seule feuille éditable) telle quelle : en-têtes propres au fichier (pas
 // ceux du report courant, au cas où ils auraient changé depuis la création du fichier) + valeurs
-// actuelles de chaque ligne, potentiellement modifiées par le distributeur — cf. features/upsync.md.
+// actuelles de chaque ligne, potentiellement modifiées par le distributeur — cf. features/upscan.md.
 export async function readDistributorLeadsSheet(distributeurNom: string): Promise<DistributorLeadsSheet | null> {
   const filePath = workbookPath(distributeurNom);
   const workbook = new ExcelJS.Workbook();
