@@ -1,9 +1,11 @@
-import { useState } from 'react';
-import type { RunStatut } from 'shared/types/run';
+import { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import type { DownsyncEtape, RunStatut } from 'shared/types/run';
 import { useExportRuns, useStartExport } from '../../api/export';
 import { useImportRuns, useStartImport } from '../../api/import';
 import { useVerifyRuns, useStartVerify } from '../../api/verify';
 import { useUpscanRuns, useStartUpscan } from '../../api/upscan';
+import { useDownsyncRuns, useStartDownsync } from '../../api/downsync';
 import { usePushRuns, useStartPush, useRefreshPushStatus } from '../../api/push';
 import { useDeleteRun, runDownloadUrl } from '../../api/runs';
 import { ConfirmModal } from '../../components/ConfirmModal';
@@ -71,7 +73,24 @@ function pushStateLabel(etatSalesforce: string): string {
   }
 }
 
+function downsyncEtapeLabel(etape: DownsyncEtape): string {
+  switch (etape) {
+    case 'export':
+      return 'Exporting from Salesforce…';
+    case 'import':
+      return 'Importing in Excel…';
+    case 'termine':
+      return 'Done';
+  }
+}
+
 export function DashboardPage() {
+  const queryClient = useQueryClient();
+
+  const { data: downsyncRuns, isPending: isDownsyncRunsPending } = useDownsyncRuns();
+  const startDownsync = useStartDownsync();
+  const deleteDownsyncRun = useDeleteRun(['downsync-runs']);
+
   const { data: exportRuns, isPending: isExportRunsPending } = useExportRuns();
   const startExport = useStartExport();
   const deleteExportRun = useDeleteRun(['export-runs']);
@@ -93,14 +112,33 @@ export function DashboardPage() {
   const startVerify = useStartVerify();
   const deleteVerifyRun = useDeleteRun(['verify-runs']);
 
-  const [runToDelete, setRunToDelete] = useState<{ id: string; kind: 'export' | 'import' | 'upscan' | 'push' | 'verify' } | null>(null);
+  const [runToDelete, setRunToDelete] = useState<{ id: string; kind: 'export' | 'import' | 'upscan' | 'push' | 'verify' | 'downsync' } | null>(
+    null,
+  );
   const [nouveauxUniquement, setNouveauxUniquement] = useState(false);
+  const [downsyncNouveauxUniquement, setDownsyncNouveauxUniquement] = useState(false);
 
+  const hasDownsyncInProgress = downsyncRuns?.some((run) => run.statut === 'en_cours') ?? false;
   const hasExportInProgress = exportRuns?.some((run) => run.statut === 'en_cours') ?? false;
   const hasImportInProgress = importRuns?.some((run) => run.statut === 'en_cours') ?? false;
   const hasUpscanInProgress = upscanRuns?.some((run) => run.statut === 'en_cours') ?? false;
   const hasPushInProgress = pushRuns?.some((run) => run.statut === 'en_cours') ?? false;
   const hasVerifyInProgress = verifyRuns?.some((run) => run.statut === 'en_cours') ?? false;
+
+  // Le downsync déclenche un export puis un import en tâche de fond côté back (leurs propres runs,
+  // visibles dans leurs sections) : tant qu'il tourne, on invalide ces deux queries à chaque poll
+  // pour que les sous-runs apparaissent sans attendre une action de l'utilisateur.
+  useEffect(() => {
+    if (!hasDownsyncInProgress) return;
+    void queryClient.invalidateQueries({ queryKey: ['export-runs'] });
+    void queryClient.invalidateQueries({ queryKey: ['import-runs'] });
+  }, [downsyncRuns, hasDownsyncInProgress, queryClient]);
+
+  const handleStartDownsync = () => {
+    startDownsync.mutate(downsyncNouveauxUniquement, {
+      onError: (error) => toast.error(error instanceof Error ? error.message : 'Downsync failed to start.'),
+    });
+  };
 
   const handleStartExport = () => {
     startExport.mutate(nouveauxUniquement, {
@@ -144,6 +182,7 @@ export function DashboardPage() {
     upscan: deleteUpscanRun,
     push: deletePushRun,
     verify: deleteVerifyRun,
+    downsync: deleteDownsyncRun,
   } as const;
 
   const handleConfirmDelete = () => {
@@ -160,6 +199,75 @@ export function DashboardPage() {
         <p className="font-mono-display text-xs tracking-[0.3em] text-neon-cyan uppercase">lead_tracker</p>
         <h1 className="mt-2 text-2xl font-semibold text-slate-100">Dashboard</h1>
       </header>
+
+      <section className="glass-panel glow-cyan mt-8 rounded-2xl px-8 py-6">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-100">DownSync</h2>
+            <p className="mt-1 text-xs text-slate-500">Runs an export from Salesforce then imports it — one action, one combined result.</p>
+          </div>
+          <div className="flex flex-col items-end gap-2">
+            <button
+              type="button"
+              onClick={handleStartDownsync}
+              disabled={hasDownsyncInProgress || startDownsync.isPending}
+              className="cursor-pointer rounded-md bg-neon-cyan/90 px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-neon-cyan disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {hasDownsyncInProgress ? 'Downsync in progress…' : 'Run downsync'}
+            </button>
+            <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-400">
+              <input
+                type="checkbox"
+                checked={downsyncNouveauxUniquement}
+                onChange={(event) => setDownsyncNouveauxUniquement(event.target.checked)}
+                className="cursor-pointer accent-neon-cyan"
+              />
+              New lead only
+            </label>
+          </div>
+        </div>
+
+        <div className="mt-6 flex flex-col gap-3">
+          {isDownsyncRunsPending && <p className="text-sm text-slate-500">Loading downsyncs…</p>}
+          {!isDownsyncRunsPending && downsyncRuns?.length === 0 && <p className="text-sm text-slate-500">No downsyncs yet.</p>}
+
+          {downsyncRuns?.map((run) => (
+            <div key={run.id} className="rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-3">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <RunBadge statut={run.statut} dateDebut={run.dateDebut} />
+                    {run.input.nouveauxUniquement && (
+                      <span className="rounded-full border border-neon-cyan/40 bg-neon-cyan/10 px-2 py-0.5 text-xs whitespace-nowrap text-neon-cyan">new only</span>
+                    )}
+                  </div>
+                  {run.statut === 'en_cours' && run.resume && (
+                    <p className="mt-1 text-sm text-neon-amber">{downsyncEtapeLabel(run.resume.etape)}</p>
+                  )}
+                  {run.statut === 'succes' && run.resume && (
+                    <p className="mt-1 text-sm text-slate-300">
+                      {run.resume.nbLeadExportes} leads exported · {run.resume.nbLeadTraites} processed · {run.resume.nbLeadNouveaux} new ·{' '}
+                      {run.resume.nbLeadMisAJour} updated · {run.resume.nbDistributeurCrees} distributor(s) created
+                      {!!run.resume.nbLeadNonAssignes && ` · ${run.resume.nbLeadNonAssignes} unassigned`}
+                    </p>
+                  )}
+                  {run.erreur && <p className="mt-1 text-sm text-neon-red">{run.erreur}</p>}
+                </div>
+
+                {run.statut !== 'en_cours' && (
+                  <button
+                    type="button"
+                    onClick={() => setRunToDelete({ id: run.id, kind: 'downsync' })}
+                    className="cursor-pointer rounded-md border border-slate-700 px-3 py-1.5 text-xs whitespace-nowrap text-slate-400 hover:border-neon-red hover:text-neon-red"
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
 
       <section className="glass-panel glow-violet mt-8 rounded-2xl px-8 py-6">
         <div className="flex items-center justify-between gap-4">

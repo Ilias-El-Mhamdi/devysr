@@ -2,6 +2,7 @@ import express, { type Express } from 'express';
 import { registerExportController } from './infra/http/controllers/export.controller';
 import { registerImportController } from './infra/http/controllers/import.controller';
 import { registerUpscanController } from './infra/http/controllers/upscan.controller';
+import { registerDownsyncController } from './infra/http/controllers/downsync.controller';
 import { registerPushController } from './infra/http/controllers/push.controller';
 import { registerRunsController } from './infra/http/controllers/runs.controller';
 import { registerSalesforceSessionController } from './infra/http/controllers/salesforceSession.controller';
@@ -10,6 +11,7 @@ import { registerVersionController } from './infra/http/controllers/version.cont
 import { createExportToSalesforceUseCase } from './core/usecases/exportToSalesforce.uc';
 import { createImportFromSalesforceUseCase } from './core/usecases/importFromSalesforce.uc';
 import { createUpscanFromDistributorsUseCase } from './core/usecases/upscanFromDistributors.uc';
+import { createDownsyncFromSalesforceUseCase } from './core/usecases/downsyncFromSalesforce.uc';
 import { createPushToSalesforceUseCase } from './core/usecases/pushToSalesforce.uc';
 import { createRefreshPushStatusUseCase } from './core/usecases/refreshPushStatus.uc';
 import { createApplyUpscanDiffToLeadsUseCase } from './core/usecases/applyUpscanDiffToLeads.uc';
@@ -72,6 +74,19 @@ export function buildApp(): Express {
     fetchReportDescribe,
     fetchLeadFieldsMeta,
     appendLeadsToDistributorWorkbook,
+    logActivity,
+  });
+
+  const downsyncFromSalesforce = createDownsyncFromSalesforceUseCase({
+    hasRunInProgress,
+    createRun,
+    patchRunResume,
+    completeRun,
+    failRun,
+    getExportRun: getRun,
+    getImportRun: getRun,
+    exportToSalesforce,
+    importFromSalesforce,
     logActivity,
   });
 
@@ -152,6 +167,7 @@ export function buildApp(): Express {
   app.use('/api', registerExportController({ exportToSalesforce }));
   app.use('/api', registerImportController({ importFromSalesforce }));
   app.use('/api', registerUpscanController({ upscanFromDistributors }));
+  app.use('/api', registerDownsyncController({ downsyncFromSalesforce }));
   app.use('/api', registerPushController({ pushToSalesforce, refreshPushStatus }));
   app.use('/api', registerRunsController());
   app.use('/api', registerSalesforceSessionController({ checkSalesforceSession }));

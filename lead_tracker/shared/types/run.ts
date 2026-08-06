@@ -1,4 +1,4 @@
-export type RunType = 'export' | 'import' | 'upscan' | 'push' | 'verify';
+export type RunType = 'export' | 'import' | 'upscan' | 'push' | 'verify' | 'downsync';
 
 export type RunStatut = 'en_cours' | 'succes' | 'echec';
 
@@ -108,4 +108,29 @@ export interface VerifyRunResume {
 
 export type VerifyRun = Run<VerifyRunInput, VerifyRunOutput, VerifyRunResume>;
 
-export type AnyRun = ExportRun | ImportRun | UpscanRun | PushRun | VerifyRun;
+export interface DownsyncRunInput {
+  nouveauxUniquement: boolean;
+}
+
+export type DownsyncRunOutput = Record<string, never>;
+
+// Étape en cours pendant le traitement (le run downsync orchestre un export puis un import, chacun
+// son propre run) — affichée en direct côté front pour donner un retour visuel pendant l'action
+// longue, cf. features/downsync.md.
+export type DownsyncEtape = 'export' | 'import' | 'termine';
+
+export interface DownsyncRunResume {
+  etape: DownsyncEtape;
+  exportRunId: string | null;
+  importRunId: string | null;
+  nbLeadExportes: number | null;
+  nbLeadTraites: number | null;
+  nbLeadNouveaux: number | null;
+  nbLeadMisAJour: number | null;
+  nbDistributeurCrees: number | null;
+  nbLeadNonAssignes: number | null;
+}
+
+export type DownsyncRun = Run<DownsyncRunInput, DownsyncRunOutput, DownsyncRunResume>;
+
+export type AnyRun = ExportRun | ImportRun | UpscanRun | PushRun | VerifyRun | DownsyncRun;
