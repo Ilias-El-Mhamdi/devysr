@@ -1,4 +1,4 @@
-export type RunType = 'export' | 'import' | 'upscan' | 'push' | 'verify' | 'downsync';
+export type RunType = 'export' | 'import' | 'upscan' | 'push' | 'verify' | 'downsync' | 'upsync';
 
 export type RunStatut = 'en_cours' | 'succes' | 'echec';
 
@@ -133,4 +133,28 @@ export interface DownsyncRunResume {
 
 export type DownsyncRun = Run<DownsyncRunInput, DownsyncRunOutput, DownsyncRunResume>;
 
-export type AnyRun = ExportRun | ImportRun | UpscanRun | PushRun | VerifyRun | DownsyncRun;
+export type UpsyncRunInput = Record<string, never>;
+
+export type UpsyncRunOutput = Record<string, never>;
+
+// Étape en cours pendant le traitement (upsync orchestre un upscan puis, s'il y a des leads
+// modifiés, un push — chacun son propre run) — affichée en direct côté front, même logique que
+// DownsyncEtape.
+export type UpsyncEtape = 'upscan' | 'push' | 'termine';
+
+export interface UpsyncRunResume {
+  etape: UpsyncEtape;
+  upscanRunId: string | null;
+  pushRunId: string | null;
+  nbFichiersLus: number | null;
+  nbLeadModifies: number | null;
+  nbDistributeursImpactes: number | null;
+  anomalies: UpscanAnomalie[];
+  etatSalesforce: PushJobEtat | null;
+  nbEnregistresTraites: number | null;
+  nbEnregistresEnEchec: number | null;
+}
+
+export type UpsyncRun = Run<UpsyncRunInput, UpsyncRunOutput, UpsyncRunResume>;
+
+export type AnyRun = ExportRun | ImportRun | UpscanRun | PushRun | VerifyRun | DownsyncRun | UpsyncRun;

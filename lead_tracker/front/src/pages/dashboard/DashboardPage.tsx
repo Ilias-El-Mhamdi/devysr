@@ -6,6 +6,7 @@ import { useImportRuns, useStartImport } from '../../api/import';
 import { useVerifyRuns, useStartVerify } from '../../api/verify';
 import { useUpscanRuns, useStartUpscan } from '../../api/upscan';
 import { useDownsyncRuns, useStartDownsync } from '../../api/downsync';
+import { useUpsyncRuns, useStartUpsync } from '../../api/upsync';
 import { usePushRuns, useStartPush, useRefreshPushStatus } from '../../api/push';
 import { useDeleteRun, runDownloadUrl } from '../../api/runs';
 import { ConfirmModal } from '../../components/ConfirmModal';
@@ -84,6 +85,7 @@ function downsyncEtapeLabel(etape: DownsyncEtape): string {
   }
 }
 
+
 export function DashboardPage() {
   const queryClient = useQueryClient();
 
@@ -103,6 +105,10 @@ export function DashboardPage() {
   const startUpscan = useStartUpscan();
   const deleteUpscanRun = useDeleteRun(['upscan-runs']);
 
+  const { data: upsyncRuns, isPending: isUpsyncRunsPending } = useUpsyncRuns();
+  const startUpsync = useStartUpsync();
+  const deleteUpsyncRun = useDeleteRun(['upsync-runs']);
+
   const { data: pushRuns, isPending: isPushRunsPending } = usePushRuns();
   const startPush = useStartPush();
   const refreshPushStatus = useRefreshPushStatus();
@@ -112,9 +118,10 @@ export function DashboardPage() {
   const startVerify = useStartVerify();
   const deleteVerifyRun = useDeleteRun(['verify-runs']);
 
-  const [runToDelete, setRunToDelete] = useState<{ id: string; kind: 'export' | 'import' | 'upscan' | 'push' | 'verify' | 'downsync' } | null>(
-    null,
-  );
+  const [runToDelete, setRunToDelete] = useState<{
+    id: string;
+    kind: 'export' | 'import' | 'upscan' | 'push' | 'verify' | 'downsync' | 'upsync';
+  } | null>(null);
   const [nouveauxUniquement, setNouveauxUniquement] = useState(false);
   const [downsyncNouveauxUniquement, setDownsyncNouveauxUniquement] = useState(false);
 
@@ -122,6 +129,7 @@ export function DashboardPage() {
   const hasExportInProgress = exportRuns?.some((run) => run.statut === 'en_cours') ?? false;
   const hasImportInProgress = importRuns?.some((run) => run.statut === 'en_cours') ?? false;
   const hasUpscanInProgress = upscanRuns?.some((run) => run.statut === 'en_cours') ?? false;
+  const hasUpsyncInProgress = upsyncRuns?.some((run) => run.statut === 'en_cours') ?? false;
   const hasPushInProgress = pushRuns?.some((run) => run.statut === 'en_cours') ?? false;
   const hasVerifyInProgress = verifyRuns?.some((run) => run.statut === 'en_cours') ?? false;
 
@@ -134,9 +142,22 @@ export function DashboardPage() {
     void queryClient.invalidateQueries({ queryKey: ['import-runs'] });
   }, [downsyncRuns, hasDownsyncInProgress, queryClient]);
 
+  // Même logique côté upsync (upscan → push).
+  useEffect(() => {
+    if (!hasUpsyncInProgress) return;
+    void queryClient.invalidateQueries({ queryKey: ['upscan-runs'] });
+    void queryClient.invalidateQueries({ queryKey: ['push-runs'] });
+  }, [upsyncRuns, hasUpsyncInProgress, queryClient]);
+
   const handleStartDownsync = () => {
     startDownsync.mutate(downsyncNouveauxUniquement, {
       onError: (error) => toast.error(error instanceof Error ? error.message : 'Downsync failed to start.'),
+    });
+  };
+
+  const handleStartUpsync = () => {
+    startUpsync.mutate(undefined, {
+      onError: (error) => toast.error(error instanceof Error ? error.message : 'Upsync failed to start.'),
     });
   };
 
@@ -183,6 +204,7 @@ export function DashboardPage() {
     push: deletePushRun,
     verify: deleteVerifyRun,
     downsync: deleteDownsyncRun,
+    upsync: deleteUpsyncRun,
   } as const;
 
   const handleConfirmDelete = () => {
@@ -258,6 +280,73 @@ export function DashboardPage() {
                   <button
                     type="button"
                     onClick={() => setRunToDelete({ id: run.id, kind: 'downsync' })}
+                    className="cursor-pointer rounded-md border border-slate-700 px-3 py-1.5 text-xs whitespace-nowrap text-slate-400 hover:border-neon-red hover:text-neon-red"
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="glass-panel glow-violet mt-8 rounded-2xl px-8 py-6">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-100">UpSync</h2>
+            <p className="mt-1 text-xs text-slate-500">Scans every distributor Excel file then uploads the changes — one action, one combined result.</p>
+          </div>
+          <button
+            type="button"
+            onClick={handleStartUpsync}
+            disabled={hasUpsyncInProgress || startUpsync.isPending}
+            className="cursor-pointer rounded-md bg-neon-violet/90 px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-neon-violet disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {hasUpsyncInProgress ? 'Upsync in progress…' : 'Run upsync'}
+          </button>
+        </div>
+
+        <div className="mt-6 flex flex-col gap-3">
+          {isUpsyncRunsPending && <p className="text-sm text-slate-500">Loading upsyncs…</p>}
+          {!isUpsyncRunsPending && upsyncRuns?.length === 0 && <p className="text-sm text-slate-500">No upsyncs yet.</p>}
+
+          {upsyncRuns?.map((run) => (
+            <div key={run.id} className="rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-3">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <RunBadge statut={run.statut} dateDebut={run.dateDebut} />
+                  {run.resume?.etape === 'upscan' && <p className="mt-1 text-sm text-neon-amber">Scanning…</p>}
+                  {run.resume && run.resume.nbFichiersLus !== null && (
+                    <p className="mt-1 text-sm text-slate-300">
+                      {run.resume.nbFichiersLus} file(s) scanned · {run.resume.nbLeadModifies} lead(s) modified ·{' '}
+                      {run.resume.nbDistributeursImpactes} distributor(s) impacted
+                      {!!run.resume.anomalies.length && ` · ${run.resume.anomalies.length} anomalie(s)`}
+                    </p>
+                  )}
+                  {run.resume?.etape === 'push' && <p className="mt-1 text-sm text-neon-amber">Uploading…</p>}
+                  {run.resume?.etape === 'termine' && run.resume.nbEnregistresTraites !== null && (
+                    <p className="mt-1 text-sm text-slate-300">
+                      {run.resume.nbEnregistresTraites} updated
+                      {!!run.resume.nbEnregistresEnEchec && ` · ${run.resume.nbEnregistresEnEchec} failed`}
+                    </p>
+                  )}
+                  {!!run.resume?.anomalies.length && (
+                    <ul className="mt-1 space-y-0.5 text-xs text-neon-amber">
+                      {run.resume.anomalies.map((anomalie, index) => (
+                        <li key={`${anomalie.leadId}-${index}`}>
+                          {anomalie.distributeur} · {anomalie.leadId} — {anomalie.raison}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {run.erreur && <p className="mt-1 text-sm text-neon-red">{run.erreur}</p>}
+                </div>
+
+                {run.statut !== 'en_cours' && (
+                  <button
+                    type="button"
+                    onClick={() => setRunToDelete({ id: run.id, kind: 'upsync' })}
                     className="cursor-pointer rounded-md border border-slate-700 px-3 py-1.5 text-xs whitespace-nowrap text-slate-400 hover:border-neon-red hover:text-neon-red"
                   >
                     Delete
