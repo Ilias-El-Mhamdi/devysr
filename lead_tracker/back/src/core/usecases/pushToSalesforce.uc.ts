@@ -134,7 +134,6 @@ export function createPushToSalesforceUseCase(deps: PushToSalesforceDeps) {
         const [describe, leadFields] = await Promise.all([deps.fetchReportDescribe(bearerToken), deps.fetchLeadFieldsMeta(bearerToken)]);
         const columnRules = buildColumnRules(describe, requiredApiNamesFrom(leadFields));
         const apiNamesByHeader = editableApiNamesByHeader(columnRules);
-        const editableHeaders = editableHeadersFrom(columnRules);
 
         const csv = await deps.readRunOutputFile(upscanRunId, upscanRun.output.fichier!);
         const bulkCsv = buildBulkCsv(csv, apiNamesByHeader);
@@ -146,7 +145,7 @@ export function createPushToSalesforceUseCase(deps: PushToSalesforceDeps) {
 
         let leadsAppliques = false;
         if (isFullySuccessful(status)) {
-          await deps.applyUpscanDiffToLeads(csv, editableHeaders, hashExcludedHeadersFrom(columnRules));
+          await deps.applyUpscanDiffToLeads(csv, editableHeadersFrom(columnRules), hashExcludedHeadersFrom(columnRules));
           leadsAppliques = true;
         }
 

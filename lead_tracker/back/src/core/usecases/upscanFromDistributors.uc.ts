@@ -60,8 +60,7 @@ export function createUpscanFromDistributorsUseCase(deps: UpscanFromDistributors
         const bearerToken = deps.toBearerToken(cookie);
         const [describe, leadFields] = await Promise.all([deps.fetchReportDescribe(bearerToken), deps.fetchLeadFieldsMeta(bearerToken)]);
         const columnRules = buildColumnRules(describe, requiredApiNamesFrom(leadFields));
-        const editableHeaders = editableHeadersFrom(columnRules);
-        const editableHeaderList = [...editableHeaders];
+        const editableHeaderList = [...editableHeadersFrom(columnRules)];
         const hashExcludedHeaders = hashExcludedHeadersFrom(columnRules);
 
         const leadsExistants = await deps.getAllLeads();

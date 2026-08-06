@@ -76,7 +76,27 @@ function isEditableColumn(entityColumnName: string | undefined): boolean {
 // colonne. `entityColumnName` donne le champ réel, fiable, indépendamment du renommage.
 // Calcul pur (aucune I/O) : partagé entre l'import (construction de l'Excel) et l'upscan
 // (détection des modifications) — cf. features/upscan.md.
+//
+// Piège découvert en test réel : pour les sous-champs d'un champ composé (ex. "First Name",
+// "Last Name", "Salutation" sur Lead), `entityColumnName` pointe vers le champ composé parent
+// ("Lead.Name"), pas vers le sous-champ réel — donc plusieurs colonnes du report se retrouvent
+// mappées vers le même `apiName` réel ("Name"), idem pour "Street"/"City"/"State"/... → "Address".
+// Un CSV avec des en-têtes en double n'est pas fiable pour l'API Bulk (Salesforce ne peut pas
+// savoir laquelle des colonnes en double fait foi), donc ces colonnes ne sont **pas éditables** :
+// les laisser éditables sans jamais pouvoir les synchroniser a provoqué une boucle infinie
+// UpScan → Push → DownSync → UpScan (le distributeur modifie une colonne composée dans Excel,
+// jamais poussée à Salesforce, donc jamais réellement à jour — cf. § Hash d'un lead, features.md).
+// Verrouillées ici, dès la génération de l'Excel (`distributorWorkbook.ts` s'appuie sur `editable`
+// pour la protection de cellule) et dans le hash (`hashExcludedHeadersFrom` ne les exclut plus).
 export function buildColumnRules(describe: ReportDescribeLike, requiredApiNames: Set<string>): Record<string, ColumnRuleLike> {
+  const apiNameOccurrences = new Map<string, number>();
+  for (const key of describe.reportMetadata.detailColumns) {
+    const info = describe.reportExtendedMetadata.detailColumnInfo[key];
+    if (!info || !isEditableColumn(info.entityColumnName)) continue;
+    const apiName = info.entityColumnName!.slice(LEAD_ENTITY_PREFIX.length);
+    apiNameOccurrences.set(apiName, (apiNameOccurrences.get(apiName) ?? 0) + 1);
+  }
+
   const result: Record<string, ColumnRuleLike> = {};
   for (const key of describe.reportMetadata.detailColumns) {
     const info = describe.reportExtendedMetadata.detailColumnInfo[key];
@@ -85,36 +105,20 @@ export function buildColumnRules(describe: ReportDescribeLike, requiredApiNames:
     const apiName = info.entityColumnName?.startsWith(LEAD_ENTITY_PREFIX) ? info.entityColumnName.slice(LEAD_ENTITY_PREFIX.length) : null;
     const picklistValues = info.dataType === 'picklist' ? (info.filterValues ?? []).map((value) => value.apiName) : [];
     const required = apiName ? requiredApiNames.has(apiName) : false;
-    const editable = isEditableColumn(info.entityColumnName);
+    const editable = isEditableColumn(info.entityColumnName) && apiNameOccurrences.get(apiName!) === 1;
 
     result[info.label] = { picklistValues, required, editable, apiName };
   }
   return result;
 }
 
-// Ex. { "Lead Status": "Status", "Email": "Email" } — uniquement les colonnes éditables (les
-// seules qu'on pousse jamais vers Salesforce, cf. features/upscan.md).
-//
-// Piège découvert en test réel : pour les sous-champs d'un champ composé (ex. "First Name",
-// "Last Name", "Salutation" sur Lead), `entityColumnName` pointe vers le champ composé parent
-// ("Lead.Name"), pas vers le sous-champ réel — donc plusieurs colonnes du report se retrouvent
-// mappées vers le même `apiName` ("Name"), idem pour "Street"/"City"/"State"/... → "Address". Un
-// CSV avec des en-têtes en double n'est pas fiable pour l'API Bulk (Salesforce ne peut pas savoir
-// laquelle des colonnes en double fait foi). On exclut donc tout `apiName` qui apparaît plus d'une
-// fois : ces champs restent éditables dans l'Excel, juste pas poussés automatiquement pour
-// l'instant — cf. features/upscan.md.
+// Ex. { "Lead Status": "Status", "Email": "Email" } — uniquement les colonnes éditables, donc déjà
+// synchronisables 1:1 (cf. le dédoublonnage par apiName fait en amont dans buildColumnRules).
 export function editableApiNamesByHeader(columnRules: Record<string, ColumnRuleLike>): Record<string, string> {
-  const editableEntries = Object.entries(columnRules).filter(([, rule]) => rule.editable && rule.apiName);
-
-  const occurrences = new Map<string, number>();
-  for (const [, rule] of editableEntries) {
-    occurrences.set(rule.apiName!, (occurrences.get(rule.apiName!) ?? 0) + 1);
-  }
-
   const result: Record<string, string> = {};
-  for (const [header, rule] of editableEntries) {
-    if (occurrences.get(rule.apiName!) === 1) {
-      result[header] = rule.apiName!;
+  for (const [header, rule] of Object.entries(columnRules)) {
+    if (rule.editable && rule.apiName) {
+      result[header] = rule.apiName;
     }
   }
   return result;
