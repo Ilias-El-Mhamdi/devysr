@@ -6,6 +6,7 @@ import {
   editableApiNamesByHeader,
   editableHeadersFrom,
   hashExcludedHeadersFrom,
+  numericHeadersFrom,
   requiredApiNamesFrom,
   type LeadFieldMetaLike,
   type ReportDescribeLike,
@@ -20,6 +21,17 @@ const SALESFORCE_ID_HEADER = 'Id';
 // un champ texte (corruption silencieuse) ou ferait échouer tout le job sur un champ numérique
 // (ex. AnnualRevenue → INVALID_FIELD, cf. features/upscan.md). On la traite comme une chaîne vide.
 const BLANK_REPORT_PLACEHOLDER = '-';
+
+// Un report Salesforce affiche un champ numérique formaté ("$10,000,000", "45%") — la Bulk API
+// attend une valeur brute ("10000000", "45") et rejette tout le job sinon (INVALID_FIELD, cf.
+// features/upscan.md). On retire tout ce qui n'est pas chiffre/point/signe moins, uniquement sur
+// les colonnes identifiées numériques par numericHeadersFrom (pas sur les champs texte, où un "-"
+// ou une virgule peut être une vraie valeur).
+const NUMERIC_REPORT_FORMATTING_CHARS = /[^0-9.-]/g;
+
+function normalizeNumericValue(value: string): string {
+  return value.trim() === '' ? '' : value.replace(NUMERIC_REPORT_FORMATTING_CHARS, '');
+}
 
 export class PushAlreadyInProgressError extends Error {
   constructor() {
@@ -64,7 +76,7 @@ export interface PushToSalesforceDeps {
 // "Lead Status") et la colonne d'identité doit s'appeler "Id" (pas "Lead ID"). Toute colonne sans
 // mapping connu (champ composé exclu, cf. editableApiNamesByHeader) est retirée plutôt que
 // d'envoyer un en-tête invalide (un label de report n'est jamais un nom de champ Salesforce).
-function buildBulkCsv(csv: string, apiNamesByHeader: Record<string, string>): string {
+function buildBulkCsv(csv: string, apiNamesByHeader: Record<string, string>, numericHeaders: ReadonlySet<string>): string {
   const { headers, rows } = parseSalesforceCsv(csv);
   const leadIdIndex = headers.findIndex((header) => header.trim().toLowerCase() === LEAD_ID_HEADER.toLowerCase());
   if (leadIdIndex === -1) {
@@ -79,7 +91,8 @@ function buildBulkCsv(csv: string, apiNamesByHeader: Record<string, string>): st
     valeurs[headers[leadIdIndex]],
     ...pushableHeaders.map((header) => {
       const value = valeurs[header] ?? '';
-      return value.trim() === BLANK_REPORT_PLACEHOLDER ? '' : value;
+      if (value.trim() === BLANK_REPORT_PLACEHOLDER) return '';
+      return numericHeaders.has(header) ? normalizeNumericValue(value) : value;
     }),
   ]);
 
@@ -136,7 +149,7 @@ export function createPushToSalesforceUseCase(deps: PushToSalesforceDeps) {
         const apiNamesByHeader = editableApiNamesByHeader(columnRules);
 
         const csv = await deps.readRunOutputFile(upscanRunId, upscanRun.output.fichier!);
-        const bulkCsv = buildBulkCsv(csv, apiNamesByHeader);
+        const bulkCsv = buildBulkCsv(csv, apiNamesByHeader, numericHeadersFrom(columnRules));
 
         const jobId = await deps.createIngestJob(bearerToken);
         await deps.uploadJobData(bearerToken, jobId, bulkCsv);

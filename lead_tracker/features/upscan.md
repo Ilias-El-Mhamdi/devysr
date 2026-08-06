@@ -138,6 +138,16 @@ même mécanisme sid-comme-bearer-token que le reste du projet.
 Test réel final (2 leads modifiés sur 2 distributeurs différents, avec des champs `"-"` non touchés dans la
 même ligne) → job `JobComplete`, 2 traités, 0 échec.
 
+4. **Champs numériques formatés par le report (`AnnualRevenue`), même sans passer par le `"-"`.** Un report
+   Salesforce affiche un champ `currency`/`double`/`int`/`percent` avec sa mise en forme d'affichage (ex.
+   `"$10,000,000"`), reprise telle quelle dans le CSV upscan puis repoussée à la Bulk API, qui attend une
+   valeur brute : `INVALID_FIELD: '$10,000,000' is not valid for the type xsd:double: AnnualRevenue` → tout
+   le job échoue (constaté en usage réel, pas seulement en test). `numericHeadersFrom()`
+   (`columnRules.ts`) repère les colonnes dont le `dataType` du describe de report est numérique ; `buildBulkCsv()`
+   (`pushToSalesforce.uc.ts`) retire alors tout caractère non chiffre/point/signe moins de leur valeur avant
+   l'envoi (même traitement que `"-"`, sur les colonnes numériques uniquement — un champ texte garde ses
+   virgules/`$`/`-` éventuels).
+
 ## Application du diff dans `leads.json` (fermeture de la boucle)
 
 Dès qu'un job Bulk API est **intégralement traité** (`etatSalesforce === 'JobComplete'` et

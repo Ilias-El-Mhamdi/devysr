@@ -53,7 +53,17 @@ export interface ColumnRuleLike {
   // pointe directement sur Lead — null pour les colonnes cross-objet (Owner.Name, User.Alias...).
   // Sert à reconstruire un CSV compatible Bulk API (qui attend des noms de champs, pas des labels).
   apiName: string | null;
+  // dataType brut du describe de report (ex. "currency", "double", "percent", "int", "picklist"...).
+  // Sert à détecter les champs numériques dont le report affiche une valeur formatée ("$10,000,000")
+  // que la Bulk API refuse (attend "10000000") — cf. numericHeadersFrom.
+  dataType?: string;
 }
+
+// dataType du describe de report pour les champs numériques Salesforce — le report les affiche
+// formatés ("$10,000,000", "45%") mais la Bulk API attend une valeur brute ("10000000", "45") :
+// INVALID_FIELD sinon (ex. AnnualRevenue → "'$10,000,000' is not valid for the type xsd:double",
+// cf. features/upscan.md). Traité comme le "-" de BLANK_REPORT_PLACEHOLDER dans buildBulkCsv.
+const NUMERIC_DATA_TYPES = new Set(['currency', 'double', 'int', 'percent']);
 
 // Une colonne est éditable par le distributeur si elle correspond à un champ "métier" directement
 // sur Lead (pas un champ système comme CreatedDate/Id/CleanStatus, cf. READ_ONLY_LEAD_API_NAMES) —
@@ -107,7 +117,7 @@ export function buildColumnRules(describe: ReportDescribeLike, requiredApiNames:
     const required = apiName ? requiredApiNames.has(apiName) : false;
     const editable = isEditableColumn(info.entityColumnName) && apiNameOccurrences.get(apiName!) === 1;
 
-    result[info.label] = { picklistValues, required, editable, apiName };
+    result[info.label] = { picklistValues, required, editable, apiName, dataType: info.dataType };
   }
   return result;
 }
@@ -142,6 +152,16 @@ export function hashExcludedHeadersFrom(columnRules: Record<string, ColumnRuleLi
   return new Set(
     Object.entries(columnRules)
       .filter(([, rule]) => rule.editable || (rule.apiName !== null && VOLATILE_LEAD_API_NAMES.has(rule.apiName)))
+      .map(([header]) => header),
+  );
+}
+
+// Colonnes dont la valeur brute affichée par le report ("$10,000,000", "45%") doit être nettoyée
+// avant l'envoi à la Bulk API, qui attend un nombre nu — cf. NUMERIC_DATA_TYPES.
+export function numericHeadersFrom(columnRules: Record<string, ColumnRuleLike>): Set<string> {
+  return new Set(
+    Object.entries(columnRules)
+      .filter(([, rule]) => rule.dataType !== undefined && NUMERIC_DATA_TYPES.has(rule.dataType))
       .map(([header]) => header),
   );
 }
