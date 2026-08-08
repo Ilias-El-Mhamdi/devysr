@@ -91,6 +91,9 @@ const COMPARISON_METRICS = {
   avgDaysToClose: { label: 'Avg. days to close', format: (value: number) => `${value.toFixed(1)}j` },
 } as const;
 
+
+const SHOW_LEAD_TREND = false;
+
 type ComparisonSortKey = keyof typeof COMPARISON_METRICS;
 
 export function StatsPage() {
@@ -379,10 +382,11 @@ export function StatsPage() {
             </div>
           </section>
 
-          <section className="glass-panel glow-cyan mt-8 rounded-2xl px-8 py-6">
+{ SHOW_LEAD_TREND ? (<section className="glass-panel glow-cyan mt-8 rounded-2xl px-8 py-6">
             <h2 className="text-lg font-semibold text-slate-100">Leads created per week — trend by distributeur</h2>
             <div className="mt-4 h-80">{trendData && <Line data={trendData} options={lineOptions} />}</div>
-          </section>
+          </section>)
+         : <></>}
 
           <section className="glass-panel glow-violet mt-8 rounded-2xl px-8 py-6">
             <div className="flex flex-wrap items-center justify-between gap-4">
