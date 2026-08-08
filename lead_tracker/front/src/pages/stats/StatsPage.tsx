@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Bar, Line } from 'react-chartjs-2';
-import type { ChartData, ChartOptions } from 'chart.js';
+import type { ActiveElement, ChartData, ChartEvent, ChartOptions, Chart as ChartJs } from 'chart.js';
 import { useStats } from '../../api/stats';
 import { PageNav } from '../../components/PageNav';
 import { StatCard } from './StatCard';
@@ -33,6 +33,48 @@ function sortCategoriesByTotal(categories: string[], distributeurs: string[], co
   });
 }
 
+interface DrilldownEntry {
+  distributeur: string;
+  value: number;
+}
+
+interface Drilldown {
+  title: string;
+  entries: DrilldownEntry[];
+}
+
+function buildDrilldownEntries(distributeurs: string[], counts: Record<string, number[]>, categoryIndex: number, activeDistributeurs: Set<string>): DrilldownEntry[] {
+  return distributeurs
+    .filter((d) => activeDistributeurs.has(d))
+    .map((distributeur) => ({ distributeur, value: counts[distributeur]?.[categoryIndex] ?? 0 }))
+    .filter((entry) => entry.value > 0)
+    .sort((a, b) => b.value - a.value || a.distributeur.localeCompare(b.distributeur));
+}
+
+// Clic sur une barre empilée : chart.js ne dit que quel segment a été touché, alors qu'on veut la
+// catégorie entière (toute la colonne) — `getElementsAtEventForMode(..., 'index', ...)` redonne
+// l'index de colonne quel que soit le segment cliqué.
+function makeCategoryClickHandler(
+  categories: string[],
+  distributeurs: string[],
+  counts: Record<string, number[]>,
+  titlePrefix: string,
+  activeDistributeurs: Set<string>,
+  setDrilldown: (drilldown: Drilldown | null) => void,
+) {
+  return (event: ChartEvent, _elements: ActiveElement[], chart: ChartJs) => {
+    const nativeEvent = event.native;
+    if (!nativeEvent) return;
+    const points = chart.getElementsAtEventForMode(nativeEvent, 'index', { intersect: false }, true);
+    if (points.length === 0) return;
+    const category = categories[points[0].index];
+    if (!category) return;
+    const entries = buildDrilldownEntries(distributeurs, counts, categories.indexOf(category), activeDistributeurs);
+    if (entries.length === 0) return;
+    setDrilldown({ title: `${titlePrefix} — ${category}`, entries });
+  };
+}
+
 function formatPercent(value: number | null): string {
   return value === null ? '—' : `${Math.round(value * 100)}%`;
 }
@@ -53,6 +95,7 @@ type ComparisonSortKey = keyof typeof COMPARISON_METRICS;
 
 export function StatsPage() {
   const { data: stats, isPending, isError } = useStats();
+  const [drilldown, setDrilldown] = useState<Drilldown | null>(null);
 
   const allDistributeurs = useMemo(() => stats?.distributeurs.map((d) => d.distributeur) ?? [], [stats]);
   const [selectedDistributeurs, setSelectedDistributeurs] = useState<Set<string> | null>(null);
@@ -242,6 +285,32 @@ export function StatsPage() {
     [sortKey],
   );
 
+  const drilldownData: ChartData<'bar'> | null = useMemo(() => {
+    if (!drilldown) return null;
+    return {
+      labels: drilldown.entries.map((entry) => entry.distributeur),
+      datasets: [
+        {
+          label: drilldown.title,
+          data: drilldown.entries.map((entry) => entry.value),
+          backgroundColor: drilldown.entries.map((entry) => colorForDistributeur(entry.distributeur, 0.8)),
+          borderRadius: 4,
+        },
+      ],
+    };
+  }, [drilldown]);
+
+  const drilldownOptions: ChartOptions<'bar'> = {
+    indexAxis: 'y',
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { color: GRID_COLOR }, beginAtZero: true, grace: '10%' },
+      y: { grid: { color: GRID_COLOR } },
+    },
+  };
+
   return (
     <main className="min-h-screen px-6 py-12 sm:px-10 lg:px-16">
       <header className="glass-panel glow-cyan rounded-2xl px-8 py-7">
@@ -285,8 +354,29 @@ export function StatsPage() {
           </section>
 
           <section className="glass-panel glow-cyan mt-8 rounded-2xl px-8 py-6">
-            <h2 className="text-lg font-semibold text-slate-100">Pipeline by status</h2>
-            <div className="mt-4 h-96">{statusData && <Bar data={statusData} options={stackedBarOptions} plugins={[stackedTotalLabelPlugin()]} />}</div>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <h2 className="text-lg font-semibold text-slate-100">Pipeline by status</h2>
+              <p className="text-xs text-slate-500">Click a column to zoom into its distributeur breakdown</p>
+            </div>
+            <div className="mt-4 h-96">
+              {statusData && (
+                <Bar
+                  data={statusData}
+                  options={{
+                    ...stackedBarOptions,
+                    onClick: makeCategoryClickHandler(
+                      stats.statusByDistributeur.statuses,
+                      stats.statusByDistributeur.distributeurs,
+                      stats.statusByDistributeur.counts,
+                      'Pipeline by status',
+                      activeDistributeurs,
+                      setDrilldown,
+                    ),
+                  }}
+                  plugins={[stackedTotalLabelPlugin()]}
+                />
+              )}
+            </div>
           </section>
 
           <section className="glass-panel glow-cyan mt-8 rounded-2xl px-8 py-6">
@@ -353,15 +443,77 @@ export function StatsPage() {
           </section>
 
           <section className="glass-panel glow-cyan mt-8 rounded-2xl px-8 py-6">
-            <h2 className="text-lg font-semibold text-slate-100">Product interest by distributeur</h2>
-            <div className="mt-4 h-96">{productData && <Bar data={productData} options={stackedBarOptions} plugins={[stackedTotalLabelPlugin()]} />}</div>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <h2 className="text-lg font-semibold text-slate-100">Product interest by distributeur</h2>
+              <p className="text-xs text-slate-500">Click a column to zoom into its distributeur breakdown</p>
+            </div>
+            <div className="mt-4 h-96">
+              {productData && (
+                <Bar
+                  data={productData}
+                  options={{
+                    ...stackedBarOptions,
+                    onClick: makeCategoryClickHandler(
+                      stats.productsByDistributeur.products,
+                      stats.productsByDistributeur.distributeurs,
+                      stats.productsByDistributeur.counts,
+                      'Product interest',
+                      activeDistributeurs,
+                      setDrilldown,
+                    ),
+                  }}
+                  plugins={[stackedTotalLabelPlugin()]}
+                />
+              )}
+            </div>
           </section>
 
           <section className="glass-panel glow-violet mt-8 rounded-2xl px-8 py-6">
-            <h2 className="text-lg font-semibold text-slate-100">Lead source</h2>
-            <div className="mt-4 h-96">{sourceData && <Bar data={sourceData} options={stackedBarOptions} plugins={[stackedTotalLabelPlugin()]} />}</div>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <h2 className="text-lg font-semibold text-slate-100">Lead source</h2>
+              <p className="text-xs text-slate-500">Click a column to zoom into its distributeur breakdown</p>
+            </div>
+            <div className="mt-4 h-96">
+              {sourceData && (
+                <Bar
+                  data={sourceData}
+                  options={{
+                    ...stackedBarOptions,
+                    onClick: makeCategoryClickHandler(
+                      stats.sourceByDistributeur.sources,
+                      stats.sourceByDistributeur.distributeurs,
+                      stats.sourceByDistributeur.counts,
+                      'Lead source',
+                      activeDistributeurs,
+                      setDrilldown,
+                    ),
+                  }}
+                  plugins={[stackedTotalLabelPlugin()]}
+                />
+              )}
+            </div>
           </section>
         </>
+      )}
+
+      {drilldown && drilldownData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-6" onClick={() => setDrilldown(null)}>
+          <div className="glass-panel glow-violet w-full max-w-2xl rounded-2xl px-8 py-6" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center justify-between gap-4">
+              <h2 className="text-lg font-semibold text-slate-100">{drilldown.title}</h2>
+              <button
+                type="button"
+                onClick={() => setDrilldown(null)}
+                className="cursor-pointer rounded-md border border-slate-700 px-3 py-1 text-xs text-slate-300 hover:border-neon-cyan"
+              >
+                Close
+              </button>
+            </div>
+            <div className="mt-4 max-h-[70vh] overflow-y-auto" style={{ height: `${Math.max(drilldown.entries.length * 32, 120)}px` }}>
+              <Bar data={drilldownData} options={drilldownOptions} plugins={[valueLabelPlugin((value) => String(value), true)]} />
+            </div>
+          </div>
+        </div>
       )}
     </main>
   );

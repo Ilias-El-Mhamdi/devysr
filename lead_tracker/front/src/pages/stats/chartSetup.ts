@@ -8,8 +8,9 @@ Chart.defaults.borderColor = 'rgba(148, 163, 184, 0.15)';
 Chart.defaults.font.family = "'JetBrains Mono', 'Fira Code', ui-monospace, monospace";
 
 // Passé en `plugins` prop d'un <Bar> précis (pas Chart.register) — un seul graphe en a besoin pour
-// l'instant, pas la peine de l'imposer partout.
-export function valueLabelPlugin(formatValue: (value: number) => string = (value) => String(value)): Plugin<'bar'> {
+// l'instant, pas la peine de l'imposer partout. `horizontal` place l'étiquette à droite de la
+// barre plutôt qu'au-dessus, pour les graphes en `indexAxis: 'y'` (ex. le drilldown par catégorie).
+export function valueLabelPlugin(formatValue: (value: number) => string = (value) => String(value), horizontal = false): Plugin<'bar'> {
   return {
     id: 'valueLabels',
     afterDatasetsDraw(chart) {
@@ -24,9 +25,15 @@ export function valueLabelPlugin(formatValue: (value: number) => string = (value
           ctx.save();
           ctx.fillStyle = '#e2e8f0';
           ctx.font = "600 11px 'JetBrains Mono', monospace";
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'bottom';
-          ctx.fillText(formatValue(raw), x, y - 4);
+          if (horizontal) {
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(formatValue(raw), x + 6, y);
+          } else {
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText(formatValue(raw), x, y - 4);
+          }
           ctx.restore();
         });
       });
