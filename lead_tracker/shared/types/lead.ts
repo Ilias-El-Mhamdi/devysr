@@ -9,3 +9,14 @@ export interface LeadRecord {
   dateImport: string;
   dateDerniereModification: string;
 }
+
+export interface ChampChange {
+  champ: string;
+  avant: string | null;
+  apres: string;
+}
+
+export interface HistoriqueEntry extends ChampChange {
+  leadId: string;
+  date: string;
+}

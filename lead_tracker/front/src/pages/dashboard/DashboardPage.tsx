@@ -4,6 +4,7 @@ import { useDownsyncRuns, useStartDownsync } from '../../api/downsync';
 import { useUpsyncRuns, useStartUpsync } from '../../api/upsync';
 import { DownsyncRunCard } from '../../components/DownsyncRunCard';
 import { UpsyncRunCard } from '../../components/UpsyncRunCard';
+import { PageNav } from '../../components/PageNav';
 import { toast } from '../../lib/toast';
 
 // Runs déclenchés depuis CE montage de la page — pas persisté : un reload ou une navigation vers
@@ -59,6 +60,7 @@ export function DashboardPage() {
           </h1>
           <span className="h-px w-10 bg-gradient-to-l from-transparent to-neon-cyan/60 sm:w-20" />
         </div>
+        <PageNav />
       </header>
 
       <section className="mt-8 px-8 py-14">

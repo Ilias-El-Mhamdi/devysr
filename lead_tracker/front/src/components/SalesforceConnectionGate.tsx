@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { useSalesforceSession } from '../api/salesforceSession';
 import { toast } from '../lib/toast';
 
@@ -12,7 +13,9 @@ interface SalesforceConnectionGateProps {
 
 export function SalesforceConnectionGate({ children }: SalesforceConnectionGateProps) {
   const { data, isFetching, refetch } = useSalesforceSession();
-  const isConnected = data?.status === 'connecte';
+  const location = useLocation();
+  // /stats ne lit que les fichiers JSON locaux, jamais Salesforce — pas besoin de bloquer dessus.
+  const isConnected = data?.status === 'connecte' || location.pathname === '/stats';
 
   const handleCheck = () => {
     refetch()
@@ -56,6 +59,9 @@ export function SalesforceConnectionGate({ children }: SalesforceConnectionGateP
               >
                 {isFetching ? 'Checking…' : 'Check'}
               </button>
+              <Link to="/stats" className="rounded-md border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:border-neon-cyan">
+                View Stats (no Salesforce needed)
+              </Link>
             </div>
           </div>
         </div>

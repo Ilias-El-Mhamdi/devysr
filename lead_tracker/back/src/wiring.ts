@@ -6,6 +6,7 @@ import { registerDownsyncController } from './infra/http/controllers/downsync.co
 import { registerUpsyncController } from './infra/http/controllers/upsync.controller';
 import { registerPushController } from './infra/http/controllers/push.controller';
 import { registerRunsController } from './infra/http/controllers/runs.controller';
+import { registerStatsController } from './infra/http/controllers/stats.controller';
 import { registerSalesforceSessionController } from './infra/http/controllers/salesforceSession.controller';
 import { registerVerifyController } from './infra/http/controllers/verify.controller';
 import { registerVersionController } from './infra/http/controllers/version.controller';
@@ -187,6 +188,7 @@ export function buildApp(): Express {
   app.use('/api', registerUpsyncController({ upsyncFromDistributors }));
   app.use('/api', registerPushController({ pushToSalesforce, refreshPushStatus }));
   app.use('/api', registerRunsController());
+  app.use('/api', registerStatsController());
   app.use('/api', registerSalesforceSessionController({ checkSalesforceSession }));
   app.use('/api', registerVerifyController({ verify }));
   app.use('/api', registerVersionController());

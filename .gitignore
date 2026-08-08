@@ -14,3 +14,4 @@
 
 # Packages de déploiement générés par scripts/release.sh
 /lead_tracker/release/
+/videos

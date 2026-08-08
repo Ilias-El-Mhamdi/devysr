@@ -1,6 +1,6 @@
 {
   "name": "back",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "private": true,
   "description": "lead_tracker — serveur local (Express)",
   "scripts": {

@@ -1,6 +1,6 @@
 import path from 'node:path';
 import fs from 'node:fs/promises';
-import type { LeadRecord } from 'shared/types/lead';
+import type { ChampChange, HistoriqueEntry, LeadRecord } from 'shared/types/lead';
 import { DATA_DIR } from '../../paths';
 
 const LEADS_PATH = path.join(DATA_DIR, 'leads.json');
@@ -24,10 +24,17 @@ export async function getAllLeads(): Promise<Record<string, LeadRecord>> {
   return readAll();
 }
 
-export interface ChampChange {
-  champ: string;
-  avant: string | null;
-  apres: string;
+export async function getHistorique(): Promise<HistoriqueEntry[]> {
+  let raw: string;
+  try {
+    raw = await fs.readFile(HISTORIQUE_PATH, 'utf-8');
+  } catch {
+    return [];
+  }
+  return raw
+    .split('\n')
+    .filter((line) => line.trim().length > 0)
+    .map((line) => JSON.parse(line) as HistoriqueEntry);
 }
 
 // Seul lecteur/écrivain de leads.json et leads_historique.jsonl (cf. CLAUDE.md § Stockage local).

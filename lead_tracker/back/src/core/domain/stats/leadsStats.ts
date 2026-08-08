@@ -1,0 +1,321 @@
+import type { Distributeur } from 'shared/types/distributeur';
+import type { HistoriqueEntry, LeadRecord } from 'shared/types/lead';
+import type { DistributeurStat, ProductsByDistributeur, SourceByDistributeur, StatsCount, StatsKpis, StatsResponse, StatsTrend, StatusByDistributeur } from 'shared/types/stats';
+
+const STATUS_ORDER = ['Open - Not Contacted', 'Working - Contacted', 'Closed - Converted', 'Closed - Not Converted'];
+
+const EMPTY_VALUE = '-';
+const STALE_AFTER_DAYS = 30;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+function isWon(status: string | undefined): boolean {
+  return status === 'Closed - Converted';
+}
+
+function isLost(status: string | undefined): boolean {
+  if (!status || isWon(status)) return false;
+  return status.startsWith('Closed');
+}
+
+// Format Salesforce "Create Date"/"Last Modified" : JJ/MM/AAAA. `null` si vide ou illisible.
+function parseSalesforceDate(value: string | undefined): Date | null {
+  if (!value || value === EMPTY_VALUE) return null;
+  const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value);
+  if (!match) return null;
+  const [, day, month, year] = match;
+  return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+}
+
+function isoWeekStart(date: Date): string {
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const dayOfWeek = d.getUTCDay() || 7; // lundi = 1 ... dimanche = 7
+  d.setUTCDate(d.getUTCDate() - dayOfWeek + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function countBy(values: string[]): StatsCount[] {
+  const counts = new Map<string, number>();
+  for (const value of values) {
+    const label = value && value !== EMPTY_VALUE ? value : 'Unspecified';
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+  return [...counts.entries()].map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count);
+}
+
+interface LeadClassification {
+  isWon: boolean;
+  isLost: boolean;
+  isWorking: boolean;
+  isOpen: boolean;
+  isNew7: boolean;
+  isNew30: boolean;
+  isStale: boolean;
+}
+
+// Un seul endroit qui décide "ouvert/en cours/gagné/perdu/récent/en sommeil" pour un lead — repris
+// tel quel par le KPI global et par l'agrégat par distributeur, pour ne jamais désynchroniser les
+// deux (cf. § Pièges spécifiques du CLAUDE.md : pas deux calculs de la même règle).
+function classifyLead(lead: LeadRecord, now: Date): LeadClassification {
+  const status = lead.valeurs['Lead Status'];
+  const won = isWon(status);
+  const lost = isLost(status);
+  const working = !won && !lost && status === 'Working - Contacted';
+  const open = !won && !lost && !working;
+
+  const createDate = parseSalesforceDate(lead.valeurs['Create Date']);
+  const ageDays = createDate ? (now.getTime() - createDate.getTime()) / MS_PER_DAY : null;
+
+  const lastModified = parseSalesforceDate(lead.valeurs['Last Modified']);
+  const isStale = !won && !lost && lastModified !== null && (now.getTime() - lastModified.getTime()) / MS_PER_DAY > STALE_AFTER_DAYS;
+
+  return {
+    isWon: won,
+    isLost: lost,
+    isWorking: working,
+    isOpen: open,
+    isNew7: ageDays !== null && ageDays <= 7,
+    isNew30: ageDays !== null && ageDays <= 30,
+    isStale,
+  };
+}
+
+function computeKpis(leads: LeadRecord[], distributeurs: Distributeur[], daysToCloseByLead: Map<string, number>, now: Date): StatsKpis {
+  let won = 0;
+  let lost = 0;
+  let open = 0;
+  let working = 0;
+  let createdLast7Days = 0;
+  let createdLast30Days = 0;
+  let staleLeads = 0;
+
+  for (const lead of leads) {
+    const c = classifyLead(lead, now);
+    if (c.isWon) won += 1;
+    else if (c.isLost) lost += 1;
+    else if (c.isWorking) working += 1;
+    else open += 1;
+    if (c.isNew7) createdLast7Days += 1;
+    if (c.isNew30) createdLast30Days += 1;
+    if (c.isStale) staleLeads += 1;
+  }
+
+  const closedDurations = [...daysToCloseByLead.values()];
+  const avgDaysToClose = closedDurations.length > 0 ? closedDurations.reduce((sum, days) => sum + days, 0) / closedDurations.length : null;
+
+  return {
+    totalLeads: leads.length,
+    totalDistributeurs: distributeurs.length,
+    open,
+    working,
+    won,
+    lost,
+    winRate: won + lost > 0 ? won / (won + lost) : null,
+    createdLast7Days,
+    createdLast30Days,
+    staleLeads,
+    avgDaysToClose,
+  };
+}
+
+// Pour chaque lead clôturé (gagné ou perdu), durée en jours entre son import dans l'outil et le
+// premier changement de "Lead Status" vers un statut clôturé — proxy de "temps de traitement côté
+// équipe commerciale" (pas la date de création Salesforce, non fiable pour un import en masse où
+// tous les leads historiques partagent la même dateImport).
+function computeDaysToClose(leads: LeadRecord[], historique: HistoriqueEntry[]): Map<string, number> {
+  const dateImportByLead = new Map(leads.map((lead) => [lead.id, new Date(lead.dateImport)]));
+  const firstCloseDateByLead = new Map<string, Date>();
+
+  for (const entry of historique) {
+    if (entry.champ !== 'Lead Status') continue;
+    if (!isWon(entry.apres) && !isLost(entry.apres)) continue;
+    const closeDate = new Date(entry.date);
+    const existing = firstCloseDateByLead.get(entry.leadId);
+    if (!existing || closeDate < existing) {
+      firstCloseDateByLead.set(entry.leadId, closeDate);
+    }
+  }
+
+  const daysToClose = new Map<string, number>();
+  for (const [leadId, closeDate] of firstCloseDateByLead) {
+    const importDate = dateImportByLead.get(leadId);
+    if (!importDate) continue;
+    const days = (closeDate.getTime() - importDate.getTime()) / MS_PER_DAY;
+    daysToClose.set(leadId, Math.max(days, 0));
+  }
+  return daysToClose;
+}
+
+function computeDistributeurStats(leads: LeadRecord[], distributeurs: Distributeur[], daysToCloseByLead: Map<string, number>, now: Date): DistributeurStat[] {
+  const leadsByDistributeur = new Map<string, LeadRecord[]>();
+  for (const lead of leads) {
+    const key = lead.distributeur || 'Unassigned';
+    const list = leadsByDistributeur.get(key) ?? [];
+    list.push(lead);
+    leadsByDistributeur.set(key, list);
+  }
+
+  const names = new Set([...distributeurs.map((d) => d.nom), ...leadsByDistributeur.keys()]);
+
+  return [...names]
+    .map((distributeur) => {
+      const distLeads = leadsByDistributeur.get(distributeur) ?? [];
+      let won = 0;
+      let lost = 0;
+      let open = 0;
+      let working = 0;
+      let createdLast7Days = 0;
+      let createdLast30Days = 0;
+      let staleLeads = 0;
+      for (const lead of distLeads) {
+        const c = classifyLead(lead, now);
+        if (c.isWon) won += 1;
+        else if (c.isLost) lost += 1;
+        else if (c.isWorking) working += 1;
+        else open += 1;
+        if (c.isNew7) createdLast7Days += 1;
+        if (c.isNew30) createdLast30Days += 1;
+        if (c.isStale) staleLeads += 1;
+      }
+      const durations = distLeads.map((lead) => daysToCloseByLead.get(lead.id)).filter((value): value is number => value !== undefined);
+
+      return {
+        distributeur,
+        total: distLeads.length,
+        active: open + working,
+        open,
+        working,
+        won,
+        lost,
+        winRate: won + lost > 0 ? won / (won + lost) : null,
+        avgDaysToClose: durations.length > 0 ? durations.reduce((sum, days) => sum + days, 0) / durations.length : null,
+        daysToCloseCount: durations.length,
+        createdLast7Days,
+        createdLast30Days,
+        staleLeads,
+      };
+    })
+    .sort((a, b) => b.total - a.total);
+}
+
+function computeTrend(leads: LeadRecord[]): StatsTrend {
+  const weeksSet = new Set<string>();
+  const countsByWeekAndDistributeur = new Map<string, Map<string, number>>();
+
+  for (const lead of leads) {
+    const createDate = parseSalesforceDate(lead.valeurs['Create Date']);
+    if (!createDate) continue;
+    const week = isoWeekStart(createDate);
+    weeksSet.add(week);
+    const distributeur = lead.distributeur || 'Unassigned';
+    const byDistributeur = countsByWeekAndDistributeur.get(week) ?? new Map<string, number>();
+    byDistributeur.set(distributeur, (byDistributeur.get(distributeur) ?? 0) + 1);
+    countsByWeekAndDistributeur.set(week, byDistributeur);
+  }
+
+  const weeks = [...weeksSet].sort();
+  const distributeurNames = [...new Set(leads.map((lead) => lead.distributeur || 'Unassigned'))].sort();
+
+  const total = weeks.map((week) => {
+    const byDistributeur = countsByWeekAndDistributeur.get(week);
+    if (!byDistributeur) return 0;
+    return [...byDistributeur.values()].reduce((sum, count) => sum + count, 0);
+  });
+
+  const byDistributeur = distributeurNames.map((distributeur) => ({
+    distributeur,
+    counts: weeks.map((week) => countsByWeekAndDistributeur.get(week)?.get(distributeur) ?? 0),
+  }));
+
+  return { weeks, total, byDistributeur };
+}
+
+function computeProductsByDistributeur(leads: LeadRecord[]): ProductsByDistributeur {
+  const products = [...new Set(leads.map((lead) => lead.valeurs['Product Interest']).filter((value) => value && value !== EMPTY_VALUE))].sort();
+  const distributeurs = [...new Set(leads.map((lead) => lead.distributeur || 'Unassigned'))].sort();
+
+  const counts: Record<string, number[]> = {};
+  for (const distributeur of distributeurs) {
+    counts[distributeur] = products.map(() => 0);
+  }
+
+  for (const lead of leads) {
+    const product = lead.valeurs['Product Interest'];
+    if (!product || product === EMPTY_VALUE) continue;
+    const productIndex = products.indexOf(product);
+    if (productIndex === -1) continue;
+    const distributeur = lead.distributeur || 'Unassigned';
+    counts[distributeur][productIndex] += 1;
+  }
+
+  return { products, distributeurs, counts };
+}
+
+function computeStatusByDistributeur(leads: LeadRecord[]): StatusByDistributeur {
+  const presentStatuses = new Set(leads.map((lead) => lead.valeurs['Lead Status']).filter((value) => value && value !== EMPTY_VALUE));
+  const statuses = [
+    ...STATUS_ORDER.filter((status) => presentStatuses.has(status)),
+    ...[...presentStatuses].filter((status) => !STATUS_ORDER.includes(status)).sort(),
+  ];
+  const distributeurs = [...new Set(leads.map((lead) => lead.distributeur || 'Unassigned'))].sort();
+
+  const counts: Record<string, number[]> = {};
+  for (const distributeur of distributeurs) {
+    counts[distributeur] = statuses.map(() => 0);
+  }
+
+  for (const lead of leads) {
+    const status = lead.valeurs['Lead Status'];
+    if (!status || status === EMPTY_VALUE) continue;
+    const statusIndex = statuses.indexOf(status);
+    if (statusIndex === -1) continue;
+    const distributeur = lead.distributeur || 'Unassigned';
+    counts[distributeur][statusIndex] += 1;
+  }
+
+  return { statuses, distributeurs, counts };
+}
+
+// Réutilise l'ordre déjà calculé par `sourceBreakdown` (trié par volume desc) plutôt que de
+// re-trier alphabétiquement — cohérence visuelle entre le graphe global et celui par distributeur.
+function computeSourceByDistributeur(leads: LeadRecord[], sourceBreakdown: StatsCount[]): SourceByDistributeur {
+  const sources = sourceBreakdown.map((s) => s.label);
+  const distributeurs = [...new Set(leads.map((lead) => lead.distributeur || 'Unassigned'))].sort();
+
+  const counts: Record<string, number[]> = {};
+  for (const distributeur of distributeurs) {
+    counts[distributeur] = sources.map(() => 0);
+  }
+
+  for (const lead of leads) {
+    const raw = lead.valeurs['Lead Source'];
+    const label = raw && raw !== EMPTY_VALUE ? raw : 'Unspecified';
+    const sourceIndex = sources.indexOf(label);
+    if (sourceIndex === -1) continue;
+    const distributeur = lead.distributeur || 'Unassigned';
+    counts[distributeur][sourceIndex] += 1;
+  }
+
+  return { sources, distributeurs, counts };
+}
+
+export function computeStats(
+  leads: LeadRecord[],
+  distributeurs: Distributeur[],
+  historique: HistoriqueEntry[],
+  now: Date = new Date(),
+): StatsResponse {
+  const daysToCloseByLead = computeDaysToClose(leads, historique);
+  const sourceBreakdown = countBy(leads.map((lead) => lead.valeurs['Lead Source']));
+
+  return {
+    kpis: computeKpis(leads, distributeurs, daysToCloseByLead, now),
+    statusBreakdown: countBy(leads.map((lead) => lead.valeurs['Lead Status'])),
+    sourceBreakdown,
+    productBreakdown: countBy(leads.map((lead) => lead.valeurs['Product Interest'])),
+    distributeurs: computeDistributeurStats(leads, distributeurs, daysToCloseByLead, now),
+    trend: computeTrend(leads),
+    productsByDistributeur: computeProductsByDistributeur(leads),
+    statusByDistributeur: computeStatusByDistributeur(leads),
+    sourceByDistributeur: computeSourceByDistributeur(leads, sourceBreakdown),
+  };
+}

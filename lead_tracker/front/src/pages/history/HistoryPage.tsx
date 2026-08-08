@@ -9,6 +9,7 @@ import { useUpsyncRuns, useStartUpsync } from '../../api/upsync';
 import { usePushRuns, useStartPush, useRefreshPushStatus } from '../../api/push';
 import { useDeleteRun, runDownloadUrl } from '../../api/runs';
 import { ConfirmModal } from '../../components/ConfirmModal';
+import { PageNav } from '../../components/PageNav';
 import { RunBadge } from '../../components/RunBadge';
 import { DownsyncRunCard } from '../../components/DownsyncRunCard';
 import { UpsyncRunCard } from '../../components/UpsyncRunCard';
@@ -175,6 +176,7 @@ export function HistoryPage() {
       <header className="glass-panel glow-cyan rounded-2xl px-8 py-6">
         <p className="font-mono-display text-xs tracking-[0.3em] text-neon-cyan uppercase">lead_tracker</p>
         <h1 className="mt-2 text-2xl font-semibold text-slate-100">History</h1>
+        <PageNav />
       </header>
 
       <section className="glass-panel glow-cyan mt-8 rounded-2xl px-8 py-6">
