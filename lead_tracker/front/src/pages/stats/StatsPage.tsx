@@ -75,6 +75,21 @@ function makeCategoryClickHandler(
   };
 }
 
+const STATUS_SHORT_LABEL: Record<string, string> = {
+  'Open - Not Contacted': 'Open',
+  'Working - Contacted': 'Working',
+  'Closed - Converted': 'Won',
+  'Closed - Not Converted': 'Lost',
+};
+
+function shortStatus(status: string): string {
+  return STATUS_SHORT_LABEL[status] ?? status;
+}
+
+function transitionKey(from: string, to: string): string {
+  return `${from}|${to}`;
+}
+
 function formatPercent(value: number | null): string {
   return value === null ? '—' : `${Math.round(value * 100)}%`;
 }
@@ -332,6 +347,51 @@ export function StatsPage() {
     },
   };
 
+  const [velocityTransitionIndex, setVelocityTransitionIndex] = useState(0);
+  const [velocityMetric, setVelocityMetric] = useState<'medianDays' | 'avgDays'>('medianDays');
+  const velocityTransition = stats?.stageVelocity.transitions[velocityTransitionIndex] ?? null;
+
+  const velocityRows = useMemo(() => {
+    if (!stats) return [];
+    const totalByDistributeur = new Map(stats.distributeurs.map((d) => [d.distributeur, d.total]));
+    return stats.stageVelocity.byDistributeur
+      .filter((d) => activeDistributeurs.has(d.distributeur))
+      .sort((a, b) => (totalByDistributeur.get(b.distributeur) ?? 0) - (totalByDistributeur.get(a.distributeur) ?? 0) || a.distributeur.localeCompare(b.distributeur));
+  }, [stats, activeDistributeurs]);
+
+  const velocityBarData: ChartData<'bar'> | null = useMemo(() => {
+    if (!velocityTransition) return null;
+    const bars = velocityRows
+      .map((d) => {
+        const entry = d.transitions.find((t) => t.from === velocityTransition.from && t.to === velocityTransition.to);
+        return { distributeur: d.distributeur, value: entry?.[velocityMetric] ?? null };
+      })
+      .filter((row): row is { distributeur: string; value: number } => row.value !== null)
+      .sort((a, b) => b.value - a.value || a.distributeur.localeCompare(b.distributeur));
+
+    return {
+      labels: bars.map((row) => row.distributeur),
+      datasets: [
+        {
+          label: `${shortStatus(velocityTransition.from)} → ${shortStatus(velocityTransition.to)}`,
+          data: bars.map((row) => row.value),
+          backgroundColor: bars.map((row) => colorForDistributeur(row.distributeur, 0.75)),
+          borderRadius: 6,
+        },
+      ],
+    };
+  }, [velocityRows, velocityTransition, velocityMetric]);
+
+  const velocityOptions: ChartOptions<'bar'> = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { color: GRID_COLOR }, ticks: { autoSkip: false, maxRotation: 40, minRotation: 0 } },
+      y: { grid: { color: GRID_COLOR }, beginAtZero: true, grace: '10%' },
+    },
+  };
+
   return (
     <main className="min-h-screen px-6 py-12 sm:px-10 lg:px-16">
       <header className="glass-panel glow-cyan rounded-2xl px-8 py-7">
@@ -467,6 +527,57 @@ export function StatsPage() {
                 </tbody>
               </table>
             </div>
+          </section>
+
+          <section className="glass-panel glow-violet mt-8 rounded-2xl px-8 py-6">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <h2 className="text-lg font-semibold text-slate-100">Stage velocity</h2>
+              <div className="flex gap-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setVelocityMetric('medianDays')}
+                  className={`cursor-pointer rounded-md border px-2.5 py-1 ${velocityMetric === 'medianDays' ? 'border-neon-cyan text-neon-cyan' : 'border-slate-700 text-slate-400'}`}
+                >
+                  Median
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVelocityMetric('avgDays')}
+                  className={`cursor-pointer rounded-md border px-2.5 py-1 ${velocityMetric === 'avgDays' ? 'border-neon-cyan text-neon-cyan' : 'border-slate-700 text-slate-400'}`}
+                >
+                  Average
+                </button>
+              </div>
+            </div>
+            <p className="mt-1 text-xs text-slate-500">
+              How long it takes leads to move from one stage to another — median is less skewed by a few leads stuck for a long time.
+            </p>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              {stats.stageVelocity.transitions.map((transition, index) => (
+                <button
+                  key={transitionKey(transition.from, transition.to)}
+                  type="button"
+                  onClick={() => setVelocityTransitionIndex(index)}
+                  className={`cursor-pointer rounded-md border px-2.5 py-1 text-xs ${
+                    velocityTransitionIndex === index ? 'border-neon-violet text-neon-violet' : 'border-slate-700 text-slate-400'
+                  }`}
+                >
+                  {shortStatus(transition.from)} → {shortStatus(transition.to)}
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-4 h-64 overflow-x-auto">
+              <div style={{ minWidth: `${Math.max((velocityBarData?.labels?.length ?? 0) * 64, 100)}px` }} className="h-full">
+                {velocityBarData && velocityBarData.labels && velocityBarData.labels.length > 0 ? (
+                  <Bar data={velocityBarData} options={velocityOptions} plugins={[valueLabelPlugin((value) => `${value.toFixed(1)}j`)]} />
+                ) : (
+                  <p className="flex h-full items-center justify-center text-sm text-slate-500">No lead has made this transition yet.</p>
+                )}
+              </div>
+            </div>
+
           </section>
 
           <section className="glass-panel glow-cyan mt-8 rounded-2xl px-8 py-6">

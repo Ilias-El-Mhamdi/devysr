@@ -60,6 +60,28 @@ export interface SourceByDistributeur {
   counts: Record<string, number[]>;
 }
 
+export interface StageTransition {
+  from: string;
+  to: string;
+}
+
+export interface StageVelocityEntry extends StageTransition {
+  count: number;
+  medianDays: number | null;
+  avgDays: number | null;
+}
+
+export interface DistributeurStageVelocity {
+  distributeur: string;
+  transitions: StageVelocityEntry[];
+}
+
+export interface StageVelocity {
+  statuses: string[];
+  transitions: StageTransition[];
+  byDistributeur: DistributeurStageVelocity[];
+}
+
 export interface StatsResponse {
   kpis: StatsKpis;
   statusBreakdown: StatsCount[];
@@ -70,4 +92,5 @@ export interface StatsResponse {
   productsByDistributeur: ProductsByDistributeur;
   statusByDistributeur: StatusByDistributeur;
   sourceByDistributeur: SourceByDistributeur;
+  stageVelocity: StageVelocity;
 }
