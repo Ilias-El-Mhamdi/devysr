@@ -31,6 +31,9 @@ export interface DistributeurStat {
   createdLast7Days: number;
   createdLast30Days: number;
   staleLeads: number;
+  lastUpdateDaysAgo: number | null;
+  avgDaysToFirstUpdate: number | null;
+  daysToFirstUpdateCount: number;
 }
 
 export interface StatsTrend {

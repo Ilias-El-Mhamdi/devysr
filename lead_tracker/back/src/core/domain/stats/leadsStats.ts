@@ -1,12 +1,28 @@
 import type { Distributeur } from 'shared/types/distributeur';
 import type { HistoriqueEntry, LeadRecord } from 'shared/types/lead';
-import type { DistributeurStat, ProductsByDistributeur, SourceByDistributeur, StatsCount, StatsKpis, StatsResponse, StatsTrend, StatusByDistributeur } from 'shared/types/stats';
+import type {
+  DistributeurStat,
+  ProductsByDistributeur,
+  SourceByDistributeur,
+  StatsCount,
+  StatsKpis,
+  StatsResponse,
+  StatsTrend,
+  StatusByDistributeur,
+} from 'shared/types/stats';
 
 const STATUS_ORDER = ['Open - Not Contacted', 'Working - Contacted', 'Closed - Converted', 'Closed - Not Converted'];
 
 const EMPTY_VALUE = '-';
 const STALE_AFTER_DAYS = 30;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+// Arrondi à 0.1 près : au-delà, deux distributeurs "mis à jour il y a 7.38j" et "7.41j" s'affichent
+// identiques (7.4j) mais ne sont jamais considérés égaux par un tri — l'arrondi à la source évite
+// cet ordre incohérent avec ce qui est affiché.
+function roundToOneDecimal(value: number): number {
+  return Math.round(value * 10) / 10;
+}
 
 function isWon(status: string | undefined): boolean {
   return status === 'Closed - Converted';
@@ -145,7 +161,38 @@ function computeDaysToClose(leads: LeadRecord[], historique: HistoriqueEntry[]):
   return daysToClose;
 }
 
-function computeDistributeurStats(leads: LeadRecord[], distributeurs: Distributeur[], daysToCloseByLead: Map<string, number>, now: Date): DistributeurStat[] {
+// Pour chaque lead ayant au moins une entrée d'historique (n'importe quel champ), durée en jours
+// entre son import et sa toute première modification — proxy de "combien de temps avant qu'un
+// distributeur touche un lead qu'on vient de lui assigner".
+function computeDaysToFirstUpdate(leads: LeadRecord[], historique: HistoriqueEntry[]): Map<string, number> {
+  const dateImportByLead = new Map(leads.map((lead) => [lead.id, new Date(lead.dateImport)]));
+  const firstUpdateDateByLead = new Map<string, Date>();
+
+  for (const entry of historique) {
+    const entryDate = new Date(entry.date);
+    const existing = firstUpdateDateByLead.get(entry.leadId);
+    if (!existing || entryDate < existing) {
+      firstUpdateDateByLead.set(entry.leadId, entryDate);
+    }
+  }
+
+  const daysToFirstUpdate = new Map<string, number>();
+  for (const [leadId, updateDate] of firstUpdateDateByLead) {
+    const importDate = dateImportByLead.get(leadId);
+    if (!importDate) continue;
+    const days = (updateDate.getTime() - importDate.getTime()) / MS_PER_DAY;
+    daysToFirstUpdate.set(leadId, Math.max(days, 0));
+  }
+  return daysToFirstUpdate;
+}
+
+function computeDistributeurStats(
+  leads: LeadRecord[],
+  distributeurs: Distributeur[],
+  daysToCloseByLead: Map<string, number>,
+  daysToFirstUpdateByLead: Map<string, number>,
+  now: Date,
+): DistributeurStat[] {
   const leadsByDistributeur = new Map<string, LeadRecord[]>();
   for (const lead of leads) {
     const key = lead.distributeur || 'Unassigned';
@@ -177,6 +224,15 @@ function computeDistributeurStats(leads: LeadRecord[], distributeurs: Distribute
         if (c.isStale) staleLeads += 1;
       }
       const durations = distLeads.map((lead) => daysToCloseByLead.get(lead.id)).filter((value): value is number => value !== undefined);
+      const updateDurations = distLeads.map((lead) => daysToFirstUpdateByLead.get(lead.id)).filter((value): value is number => value !== undefined);
+
+      let mostRecentUpdate: Date | null = null;
+      for (const lead of distLeads) {
+        const lastModified = parseSalesforceDate(lead.valeurs['Last Modified']);
+        if (lastModified && (!mostRecentUpdate || lastModified > mostRecentUpdate)) {
+          mostRecentUpdate = lastModified;
+        }
+      }
 
       return {
         distributeur,
@@ -192,6 +248,9 @@ function computeDistributeurStats(leads: LeadRecord[], distributeurs: Distribute
         createdLast7Days,
         createdLast30Days,
         staleLeads,
+        lastUpdateDaysAgo: mostRecentUpdate ? roundToOneDecimal((now.getTime() - mostRecentUpdate.getTime()) / MS_PER_DAY) : null,
+        avgDaysToFirstUpdate: updateDurations.length > 0 ? updateDurations.reduce((sum, days) => sum + days, 0) / updateDurations.length : null,
+        daysToFirstUpdateCount: updateDurations.length,
       };
     })
     .sort((a, b) => b.total - a.total);
@@ -305,6 +364,7 @@ export function computeStats(
   now: Date = new Date(),
 ): StatsResponse {
   const daysToCloseByLead = computeDaysToClose(leads, historique);
+  const daysToFirstUpdateByLead = computeDaysToFirstUpdate(leads, historique);
   const sourceBreakdown = countBy(leads.map((lead) => lead.valeurs['Lead Source']));
 
   return {
@@ -312,7 +372,7 @@ export function computeStats(
     statusBreakdown: countBy(leads.map((lead) => lead.valeurs['Lead Status'])),
     sourceBreakdown,
     productBreakdown: countBy(leads.map((lead) => lead.valeurs['Product Interest'])),
-    distributeurs: computeDistributeurStats(leads, distributeurs, daysToCloseByLead, now),
+    distributeurs: computeDistributeurStats(leads, distributeurs, daysToCloseByLead, daysToFirstUpdateByLead, now),
     trend: computeTrend(leads),
     productsByDistributeur: computeProductsByDistributeur(leads),
     statusByDistributeur: computeStatusByDistributeur(leads),

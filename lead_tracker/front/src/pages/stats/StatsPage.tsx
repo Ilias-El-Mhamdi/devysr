@@ -86,9 +86,12 @@ function formatDays(value: number | null): string {
 const GRID_COLOR = 'rgba(148, 163, 184, 0.12)';
 
 const COMPARISON_METRICS = {
-  total: { label: 'Total leads', format: (value: number) => String(value) },
-  winRate: { label: 'Win rate', format: (value: number) => `${value}%` },
-  avgDaysToClose: { label: 'Avg. days to close', format: (value: number) => `${value.toFixed(1)}j` },
+  total: { label: 'Total leads', shortLabel: 'volume', format: (value: number) => String(value), ascending: false },
+  winRate: { label: 'Win rate', shortLabel: 'win rate', format: (value: number) => `${value}%`, ascending: false },
+  avgDaysToClose: { label: 'Avg. days to close', shortLabel: 'avg days to close', format: (value: number) => `${value.toFixed(1)}j`, ascending: false },
+  // Plus petit = mis à jour plus récemment = "meilleur" ici, contrairement aux autres métriques où
+  // le plus gros est mis en avant — on trie donc en ascendant, pas par cohérence avec les autres.
+  lastUpdateDaysAgo: { label: 'Last update (avg)', shortLabel: 'last update', format: (value: number) => `${value.toFixed(1)}j`, ascending: true },
 } as const;
 
 
@@ -123,6 +126,14 @@ export function StatsPage() {
     const durationSum = selected.reduce((acc, d) => acc + (d.avgDaysToClose ?? 0) * d.daysToCloseCount, 0);
     const durationCount = selected.reduce((acc, d) => acc + d.daysToCloseCount, 0);
 
+    // Moyenne par distributeur (pas par lead) : "en moyenne, un distributeur a touché un lead
+    // il y a combien de jours" — chaque distributeur pèse pour un, indépendamment de son volume.
+    const lastUpdateValues = selected.map((d) => d.lastUpdateDaysAgo).filter((value): value is number => value !== null);
+    const avgDistributeurLastUpdateDays = lastUpdateValues.length > 0 ? lastUpdateValues.reduce((sum, value) => sum + value, 0) / lastUpdateValues.length : null;
+
+    const firstUpdateSum = selected.reduce((acc, d) => acc + (d.avgDaysToFirstUpdate ?? 0) * d.daysToFirstUpdateCount, 0);
+    const firstUpdateCount = selected.reduce((acc, d) => acc + d.daysToFirstUpdateCount, 0);
+
     return {
       totalLeads: sum('total'),
       totalDistributeurs: selected.length,
@@ -135,6 +146,8 @@ export function StatsPage() {
       createdLast30Days: sum('createdLast30Days'),
       staleLeads: sum('staleLeads'),
       avgDaysToClose: durationCount > 0 ? durationSum / durationCount : null,
+      avgDistributeurLastUpdateDays,
+      avgDaysToFirstUpdate: firstUpdateCount > 0 ? firstUpdateSum / firstUpdateCount : null,
     };
   }, [stats, activeDistributeurs]);
 
@@ -247,12 +260,16 @@ export function StatsPage() {
   const [sortKey, setSortKey] = useState<ComparisonSortKey>('total');
   const sortedDistributeurs = useMemo(() => {
     if (!stats) return [];
+    const { ascending } = COMPARISON_METRICS[sortKey];
+    // null = pas de donnée : toujours relégué en dernier, quel que soit le sens du tri.
+    const missingValueFallback = ascending ? Infinity : -1;
     return stats.distributeurs
       .filter((d) => activeDistributeurs.has(d.distributeur))
       .sort((a, b) => {
-        const aValue = a[sortKey] ?? -1;
-        const bValue = b[sortKey] ?? -1;
-        return bValue - aValue;
+        const aValue = a[sortKey] ?? missingValueFallback;
+        const bValue = b[sortKey] ?? missingValueFallback;
+        const diff = ascending ? aValue - bValue : bValue - aValue;
+        return diff !== 0 ? diff : a.distributeur.localeCompare(b.distributeur);
       });
   }, [stats, sortKey, activeDistributeurs]);
 
@@ -266,6 +283,7 @@ export function StatsPage() {
           data: sortedDistributeurs.map((d) => {
             if (sortKey === 'total') return d.total;
             if (sortKey === 'winRate') return Math.round((d.winRate ?? 0) * 100);
+            if (sortKey === 'lastUpdateDaysAgo') return d.lastUpdateDaysAgo ?? 0;
             return d.avgDaysToClose ?? 0;
           }),
           backgroundColor: sortedDistributeurs.map((d) => colorForDistributeur(d.distributeur, 0.75)),
@@ -354,6 +372,8 @@ export function StatsPage() {
             <StatCard label="New (7d)" value={String(filteredKpis.createdLast7Days)} accent="cyan" />
             <StatCard label="New (30d)" value={String(filteredKpis.createdLast30Days)} accent="cyan" />
             <StatCard label="Stale (30d+)" value={String(filteredKpis.staleLeads)} accent="red" />
+            <StatCard label="Last update (avg)" value={formatDays(filteredKpis.avgDistributeurLastUpdateDays)} accent="violet" />
+            <StatCard label="Time to update (avg)" value={formatDays(filteredKpis.avgDaysToFirstUpdate)} accent="violet" />
           </section>
 
           <section className="glass-panel glow-cyan mt-8 rounded-2xl px-8 py-6">
@@ -382,24 +402,25 @@ export function StatsPage() {
             </div>
           </section>
 
-{ SHOW_LEAD_TREND ? (<section className="glass-panel glow-cyan mt-8 rounded-2xl px-8 py-6">
-            <h2 className="text-lg font-semibold text-slate-100">Leads created per week — trend by distributeur</h2>
-            <div className="mt-4 h-80">{trendData && <Line data={trendData} options={lineOptions} />}</div>
-          </section>)
-         : <></>}
+          {SHOW_LEAD_TREND && (
+            <section className="glass-panel glow-cyan mt-8 rounded-2xl px-8 py-6">
+              <h2 className="text-lg font-semibold text-slate-100">Leads created per week — trend by distributeur</h2>
+              <div className="mt-4 h-80">{trendData && <Line data={trendData} options={lineOptions} />}</div>
+            </section>
+          )}
 
           <section className="glass-panel glow-violet mt-8 rounded-2xl px-8 py-6">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <h2 className="text-lg font-semibold text-slate-100">Distributeur comparison</h2>
               <div className="flex gap-2 text-xs">
-                {(['total', 'winRate', 'avgDaysToClose'] as const).map((key) => (
+                {(Object.keys(COMPARISON_METRICS) as ComparisonSortKey[]).map((key) => (
                   <button
                     key={key}
                     type="button"
                     onClick={() => setSortKey(key)}
                     className={`cursor-pointer rounded-md border px-2.5 py-1 ${sortKey === key ? 'border-neon-violet text-neon-violet' : 'border-slate-700 text-slate-400'}`}
                   >
-                    Sort by {key === 'total' ? 'volume' : key === 'winRate' ? 'win rate' : 'avg days to close'}
+                    Sort by {COMPARISON_METRICS[key].shortLabel}
                   </button>
                 ))}
               </div>
@@ -414,7 +435,7 @@ export function StatsPage() {
             </div>
 
             <div className="mt-6 overflow-x-auto">
-              <table className="w-full min-w-[640px] text-left text-sm">
+              <table className="w-full min-w-[760px] text-left text-sm">
                 <thead>
                   <tr className="border-b border-slate-800 text-xs tracking-wide text-slate-500 uppercase">
                     <th className="py-2 pr-4">Distributeur</th>
@@ -424,6 +445,7 @@ export function StatsPage() {
                     <th className="py-2 pr-4">Lost</th>
                     <th className="py-2 pr-4">Win rate</th>
                     <th className="py-2 pr-4">Avg. days to close</th>
+                    <th className="py-2 pr-4">Last update</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -439,6 +461,7 @@ export function StatsPage() {
                       <td className="py-2 pr-4 text-neon-red">{d.lost}</td>
                       <td className="py-2 pr-4 text-slate-300">{formatPercent(d.winRate)}</td>
                       <td className="py-2 pr-4 text-slate-300">{formatDays(d.avgDaysToClose)}</td>
+                      <td className="py-2 pr-4 text-slate-300">{formatDays(d.lastUpdateDaysAgo)}</td>
                     </tr>
                   ))}
                 </tbody>
