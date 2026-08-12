@@ -22,6 +22,10 @@ export const lineOptions: ChartOptions<'line'> = {
   },
 };
 
+export function roundToOneDecimal(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
 export function formatPercent(value: number | null): string {
   return value === null ? '—' : `${Math.round(value * 100)}%`;
 }

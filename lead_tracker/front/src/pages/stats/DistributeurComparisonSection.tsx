@@ -4,11 +4,12 @@ import type { ChartData, ChartOptions } from 'chart.js';
 import type { DistributeurStat } from 'shared/types/stats';
 import { valueLabelPlugin } from './chartSetup';
 import { colorForDistributeur } from './distributeurColors';
-import { formatDays, formatPercent, GRID_COLOR } from './statsChartUtils';
+import { formatDays, formatPercent, GRID_COLOR, roundToOneDecimal } from './statsChartUtils';
 
 const COMPARISON_METRICS = {
   total: { label: 'Total leads', shortLabel: 'volume', format: (value: number) => String(value), ascending: false },
   winRate: { label: 'Win rate', shortLabel: 'win rate', format: (value: number) => `${value}%`, ascending: false },
+  conversionRate: { label: 'Conversion rate', shortLabel: 'conversion rate', format: (value: number) => `${value}%`, ascending: false },
   avgDaysToClose: { label: 'Avg. days to close', shortLabel: 'avg days to close', format: (value: number) => `${value.toFixed(1)}j`, ascending: false },
   // Plus petit = mis à jour plus récemment = "meilleur" ici, contrairement aux autres métriques où
   // le plus gros est mis en avant — on trie donc en ascendant, pas par cohérence avec les autres.
@@ -48,8 +49,9 @@ export function DistributeurComparisonSection({ distributeurs, activeDistributeu
           data: sortedDistributeurs.map((d) => {
             if (sortKey === 'total') return d.total;
             if (sortKey === 'winRate') return Math.round((d.winRate ?? 0) * 100);
-            if (sortKey === 'lastUpdateDaysAgo') return d.lastUpdateDaysAgo ?? 0;
-            return d.avgDaysToClose ?? 0;
+            if (sortKey === 'conversionRate') return Math.round((d.conversionRate ?? 0) * 100);
+            if (sortKey === 'lastUpdateDaysAgo') return roundToOneDecimal(d.lastUpdateDaysAgo ?? 0);
+            return roundToOneDecimal(d.avgDaysToClose ?? 0);
           }),
           backgroundColor: sortedDistributeurs.map((d) => colorForDistributeur(d.distributeur, 0.75)),
           borderRadius: 6,
@@ -66,7 +68,7 @@ export function DistributeurComparisonSection({ distributeurs, activeDistributeu
       plugins: { legend: { display: false } },
       scales: {
         x: { grid: { color: GRID_COLOR }, ticks: { autoSkip: false, maxRotation: 40, minRotation: 0 } },
-        y: { grid: { color: GRID_COLOR }, beginAtZero: true, ...(sortKey === 'winRate' ? { suggestedMax: 110, max: 110 } : {}) },
+        y: { grid: { color: GRID_COLOR }, beginAtZero: true, ...(sortKey === 'winRate' || sortKey === 'conversionRate' ? { suggestedMax: 110, max: 110 } : {}) },
       },
     }),
     [sortKey],
@@ -106,6 +108,7 @@ export function DistributeurComparisonSection({ distributeurs, activeDistributeu
               <th className="py-2 pr-4">Won</th>
               <th className="py-2 pr-4">Lost</th>
               <th className="py-2 pr-4">Win rate</th>
+              <th className="py-2 pr-4">Conversion rate</th>
               <th className="py-2 pr-4">Avg. days to close</th>
               <th className="py-2 pr-4">Last update</th>
             </tr>
@@ -122,6 +125,7 @@ export function DistributeurComparisonSection({ distributeurs, activeDistributeu
                 <td className="py-2 pr-4 text-neon-green">{d.won}</td>
                 <td className="py-2 pr-4 text-neon-red">{d.lost}</td>
                 <td className="py-2 pr-4 text-slate-300">{formatPercent(d.winRate)}</td>
+                <td className="py-2 pr-4 text-slate-300">{formatPercent(d.conversionRate)}</td>
                 <td className="py-2 pr-4 text-slate-300">{formatDays(d.avgDaysToClose)}</td>
                 <td className="py-2 pr-4 text-slate-300">{formatDays(d.lastUpdateDaysAgo)}</td>
               </tr>

@@ -2,6 +2,7 @@ import type { Distributeur } from 'shared/types/distributeur';
 import type { LeadRecord } from 'shared/types/lead';
 import type { StatsKpis } from 'shared/types/stats';
 import { classifyLead } from './leadClassification';
+import { roundToOneDecimal } from './shared';
 
 export function computeKpis(leads: LeadRecord[], distributeurs: Distributeur[], daysToCloseByLead: Map<string, number>, now: Date): StatsKpis {
   let won = 0;
@@ -24,7 +25,7 @@ export function computeKpis(leads: LeadRecord[], distributeurs: Distributeur[], 
   }
 
   const closedDurations = [...daysToCloseByLead.values()];
-  const avgDaysToClose = closedDurations.length > 0 ? closedDurations.reduce((sum, days) => sum + days, 0) / closedDurations.length : null;
+  const avgDaysToClose = closedDurations.length > 0 ? roundToOneDecimal(closedDurations.reduce((sum, days) => sum + days, 0) / closedDurations.length) : null;
 
   return {
     totalLeads: leads.length,

@@ -61,13 +61,14 @@ export function computeDistributeurStats(
         won,
         lost,
         winRate: won + lost > 0 ? won / (won + lost) : null,
-        avgDaysToClose: durations.length > 0 ? durations.reduce((sum, days) => sum + days, 0) / durations.length : null,
+        conversionRate: distLeads.length > 0 ? won / distLeads.length : null,
+        avgDaysToClose: durations.length > 0 ? roundToOneDecimal(durations.reduce((sum, days) => sum + days, 0) / durations.length) : null,
         daysToCloseCount: durations.length,
         createdLast7Days,
         createdLast30Days,
         staleLeads,
         lastUpdateDaysAgo: mostRecentUpdate ? roundToOneDecimal((now.getTime() - mostRecentUpdate.getTime()) / MS_PER_DAY) : null,
-        avgDaysToFirstUpdate: updateDurations.length > 0 ? updateDurations.reduce((sum, days) => sum + days, 0) / updateDurations.length : null,
+        avgDaysToFirstUpdate: updateDurations.length > 0 ? roundToOneDecimal(updateDurations.reduce((sum, days) => sum + days, 0) / updateDurations.length) : null,
         daysToFirstUpdateCount: updateDurations.length,
       };
     })

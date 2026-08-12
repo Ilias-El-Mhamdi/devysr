@@ -42,7 +42,7 @@ export function StageVelocitySection({ stageVelocity, distributeurs, activeDistr
         return { distributeur: d.distributeur, value: entry?.[metric] ?? null };
       })
       .filter((row): row is { distributeur: string; value: number } => row.value !== null)
-      .sort((a, b) => b.value - a.value || a.distributeur.localeCompare(b.distributeur));
+      .sort((a, b) => a.value - b.value || a.distributeur.localeCompare(b.distributeur));
 
     return {
       labels: bars.map((row) => row.distributeur),

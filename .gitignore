@@ -6,7 +6,7 @@
 # Datasource local storage ignored files
 /dataSources/
 /dataSources.local.xml
-
+/design
 /*/.env
 
 # Données clients réelles (JSON + Excel générés) — jamais versionnées

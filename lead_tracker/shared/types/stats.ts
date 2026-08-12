@@ -26,6 +26,7 @@ export interface DistributeurStat {
   won: number;
   lost: number;
   winRate: number | null;
+  conversionRate: number | null;
   avgDaysToClose: number | null;
   daysToCloseCount: number;
   createdLast7Days: number;
