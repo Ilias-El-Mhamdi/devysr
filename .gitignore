@@ -7,7 +7,7 @@
 /dataSources/
 /dataSources.local.xml
 /design
-/*/.env
+/*/*.env
 
 # Données clients réelles (JSON + Excel générés) — jamais versionnées
 /lead_tracker/data/
@@ -15,3 +15,4 @@
 # Packages de déploiement générés par scripts/release.sh
 /lead_tracker/release/
 /videos
+
