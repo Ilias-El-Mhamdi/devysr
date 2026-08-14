@@ -1,0 +1,27 @@
+SECTION 1: LEAD MANAGER (0:00 - 0:49)
+
+LM1 | This is Lead Bridge, your solution for distributor lead management — connected directly to Salesforce, live.
+LM2 | Right now, a thousand leads are sitting in Salesforce, ready to convert — but out of reach for your distributors, who have no access to the platform.
+LM3 | One click. Lead Bridge pulls the data straight from Salesforce.
+LM4 | Seconds later, every single lead has been sorted per distributor.
+LM5 | Each distributor receives their own leads file in Excel format - only their leads, nothing else.
+LM6 | Updating status is just as simple. Here, a lead moves to "converted." Critical fields stay locked, so nothing gets broken by mistake.
+LM7 | One click, and it's synced back to Salesforce.
+LM8 | And there it is: the status the distributor just updated in Excel is now reflected in Salesforce, automatically — no manual entry, no delay.
+
+SECTION 2: LEAD STATS (0:49 - 1:36)
+
+ST1 | This is the leads dashboard: a single view of everything that matters — total leads, geographic spread, status, conversion rate, speed to close, and how responsive each distributor is.
+ST2 | Every stage of the funnel — contacted, working, converted, disqualified. Click any bar for the full breakdown.
+ST3 | Compare distributors side by side — volume, conversion rate, speed to close, and how actively they're managing their leads.
+ST4 | Track the funnel stage by stage — and spot exactly where leads slow down.
+ST5 | With so many products moving through your distributors, you can now track product performance — seeing exactly which ones each distributor converts best.
+ST6 | Break it down further: leads grouped by product, and see exactly how each one splits across your distributors.
+ST7 | See exactly which marketing activities are generating leads — trade shows, webinars, campaigns, social media, conferences, your website — and know exactly which channels deliver the real return.
+ST8 | Filter by any single distributor, any group of distributors, or even by region — Asia Pacific, Europe, Middle East and Africa — and every chart updates instantly.
+ST9 | And this is only the starting point. The dashboard is built to evolve with your business needs — tracking exactly the KPIs that matter to you, each one triggering its own automated action.
+ST10| An email to a distributor when updates run late, an alert when conversion drops below target. All handled automatically, without any manual work. Lead Bridge adapts to whatever drives your next stage of growth.
+
+SECTION 3: END CARD (1:36 - 1:38)
+
+END1 | Lead Bridge. Your solution for distributor lead management — so no lead is left behind.

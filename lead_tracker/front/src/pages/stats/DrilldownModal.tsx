@@ -11,18 +11,20 @@ interface DrilldownModalProps {
   onClose: () => void;
 }
 
-const drilldownOptions: ChartOptions<'bar'> = {
-  indexAxis: 'y',
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: { legend: { display: false } },
-  scales: {
-    x: { grid: { color: GRID_COLOR }, beginAtZero: true, grace: '10%' },
-    y: { grid: { color: GRID_COLOR } },
-  },
-};
-
 export function DrilldownModal({ drilldown, onClose }: DrilldownModalProps) {
+  const formatValue = drilldown.formatValue ?? ((value: number) => String(value));
+
+  const drilldownOptions: ChartOptions<'bar'> = {
+    indexAxis: 'y',
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false }, tooltip: { callbacks: { label: (context) => formatValue(context.parsed.x ?? 0) } } },
+    scales: {
+      x: { grid: { color: GRID_COLOR }, beginAtZero: true, grace: '10%' },
+      y: { grid: { color: GRID_COLOR } },
+    },
+  };
+
   const drilldownData: ChartData<'bar'> = useMemo(
     () => ({
       labels: drilldown.entries.map((entry) => entry.distributeur),
@@ -48,7 +50,7 @@ export function DrilldownModal({ drilldown, onClose }: DrilldownModalProps) {
           </button>
         </div>
         <div className="mt-4 max-h-[70vh] overflow-y-auto" style={{ height: `${Math.max(drilldown.entries.length * 32, 120)}px` }}>
-          <Bar data={drilldownData} options={drilldownOptions} plugins={[valueLabelPlugin((value) => String(value), true)]} />
+          <Bar data={drilldownData} options={drilldownOptions} plugins={[valueLabelPlugin(formatValue, true)]} />
         </div>
       </div>
     </div>

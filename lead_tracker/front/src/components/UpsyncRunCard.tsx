@@ -17,7 +17,7 @@ export function UpsyncRunCard({ run, onDelete }: UpsyncRunCardProps) {
           {run.resume && run.resume.nbFichiersLus !== null && (
             <p className="text-sm text-slate-300">
               {run.resume.nbFichiersLus} file(s) scanned · {run.resume.nbLeadModifies} lead(s) modified ·{' '}
-              {run.resume.nbDistributeursImpactes} distributor(s) impacted
+              {run.resume.nbDistributeursImpactes} distributor(s) updated
               {!!run.resume.anomalies.length && ` · ${run.resume.anomalies.length} anomalie(s)`}
             </p>
           )}

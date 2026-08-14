@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import type { DownsyncRun, UpsyncRun } from 'shared/types/run';
 import { useDownsyncRuns, useStartDownsync } from '../../api/downsync';
 import { useUpsyncRuns, useStartUpsync } from '../../api/upsync';
@@ -7,10 +6,10 @@ import { UpsyncRunCard } from '../../components/UpsyncRunCard';
 import { PageNav } from '../../components/PageNav';
 import { toast } from '../../lib/toast';
 
-// Runs déclenchés depuis CE montage de la page — pas persisté : un reload ou une navigation vers
-// une autre page démonte le composant et vide cet état. L'historique complet, lui, reste
-// consultable sans limite de session sur /history (cf. HistoryPage).
-type SessionEntry = { kind: 'downsync'; id: string } | { kind: 'upsync'; id: string };
+// Historique complet (pas limité à la session courante) : tous les downsync/upsync connus du
+// back, fusionnés et triés par date. Pour l'historique détaillé des autres types de run
+// (export/import/upscan/push/verify), voir /history (cf. HistoryPage).
+type RunEntry = { kind: 'downsync'; run: DownsyncRun } | { kind: 'upsync'; run: UpsyncRun };
 
 export function DashboardPage() {
   const { data: downsyncRuns } = useDownsyncRuns();
@@ -19,36 +18,29 @@ export function DashboardPage() {
   const { data: upsyncRuns } = useUpsyncRuns();
   const startUpsync = useStartUpsync();
 
-  const [sessionRuns, setSessionRuns] = useState<SessionEntry[]>([]);
-
   const hasDownsyncInProgress = downsyncRuns?.some((run) => run.statut === 'en_cours') ?? false;
   const hasUpsyncInProgress = upsyncRuns?.some((run) => run.statut === 'en_cours') ?? false;
   const isAnySyncRunning = hasDownsyncInProgress || hasUpsyncInProgress || startDownsync.isPending || startUpsync.isPending;
 
   const handleStartDownsync = () => {
     startDownsync.mutate(false, {
-      onSuccess: ({ runId }) => setSessionRuns((prev) => [{ kind: 'downsync', id: runId }, ...prev]),
       onError: (error) => toast.error(error instanceof Error ? error.message : 'Downsync failed to start.'),
     });
   };
 
   const handleStartUpsync = () => {
     startUpsync.mutate(undefined, {
-      onSuccess: ({ runId }) => setSessionRuns((prev) => [{ kind: 'upsync', id: runId }, ...prev]),
       onError: (error) => toast.error(error instanceof Error ? error.message : 'Upsync failed to start.'),
     });
   };
 
-  function findRun(entry: SessionEntry): DownsyncRun | UpsyncRun | undefined {
-    return entry.kind === 'downsync' ? downsyncRuns?.find((run) => run.id === entry.id) : upsyncRuns?.find((run) => run.id === entry.id);
-  }
+  const allRuns: RunEntry[] = [
+    ...(downsyncRuns?.map((run): RunEntry => ({ kind: 'downsync', run })) ?? []),
+    ...(upsyncRuns?.map((run): RunEntry => ({ kind: 'upsync', run })) ?? []),
+  ].sort((a, b) => b.run.dateDebut.localeCompare(a.run.dateDebut));
 
-  const sessionRunsWithData = sessionRuns
-    .map((entry) => ({ entry, run: findRun(entry) }))
-    .filter((item): item is { entry: SessionEntry; run: DownsyncRun | UpsyncRun } => item.run !== undefined);
-
-  const inProgress = sessionRunsWithData.filter(({ run }) => run.statut === 'en_cours');
-  const history = sessionRunsWithData.filter(({ run }) => run.statut !== 'en_cours');
+  const inProgress = allRuns.filter(({ run }) => run.statut === 'en_cours');
+  const history = allRuns.filter(({ run }) => run.statut !== 'en_cours');
 
   return (
     <main className="min-h-screen px-6 py-12 sm:px-10 lg:px-16">
@@ -94,8 +86,8 @@ export function DashboardPage() {
           <h2 className="text-lg font-semibold text-slate-100">In progress</h2>
 
           <div className="mt-6 flex flex-col gap-4">
-            {inProgress.map(({ entry, run }) =>
-              entry.kind === 'downsync' ? <DownsyncRunCard key={entry.id} run={run as DownsyncRun} /> : <UpsyncRunCard key={entry.id} run={run as UpsyncRun} />,
+            {inProgress.map(({ kind, run }) =>
+              kind === 'downsync' ? <DownsyncRunCard key={run.id} run={run} /> : <UpsyncRunCard key={run.id} run={run} />,
             )}
           </div>
         </section>
@@ -106,8 +98,8 @@ export function DashboardPage() {
           <h2 className="text-lg font-semibold text-slate-100">History</h2>
 
           <div className="mt-6 flex flex-col gap-4">
-            {history.map(({ entry, run }) =>
-              entry.kind === 'downsync' ? <DownsyncRunCard key={entry.id} run={run as DownsyncRun} /> : <UpsyncRunCard key={entry.id} run={run as UpsyncRun} />,
+            {history.map(({ kind, run }) =>
+              kind === 'downsync' ? <DownsyncRunCard key={run.id} run={run} /> : <UpsyncRunCard key={run.id} run={run} />,
             )}
           </div>
         </section>

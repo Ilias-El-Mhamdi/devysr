@@ -60,6 +60,43 @@ export function sortDistributeursByImpact(distributeurs: string[], counts: Recor
   });
 }
 
+// Même principe que sortDistributeursByImpact, mais pour un empilement en taux de conversion : la
+// somme des % par produit n'a pas de sens comme critère de tri (ça favorise un distributeur présent
+// sur beaucoup de produits plutôt que celui qui convertit vraiment le mieux), donc on trie sur le
+// taux de conversion global du distributeur (même valeur que "Distributeur comparison") — le
+// meilleur convertisseur se retrouve en bas de chaque colonne.
+export function sortDistributeursByConversionRate(distributeurs: string[], conversionRateByDistributeur: Map<string, number | null>): string[] {
+  return [...distributeurs].sort((a, b) => {
+    const rateA = conversionRateByDistributeur.get(a) ?? -1;
+    const rateB = conversionRateByDistributeur.get(b) ?? -1;
+    if (rateB !== rateA) return rateB - rateA;
+    return a.localeCompare(b);
+  });
+}
+
+// Pour un empilement où l'ordre n'a de sens QUE colonne par colonne (ex. taux de conversion produit
+// par produit — contrairement au volume, il n'y a pas de "meilleur distributeur toutes colonnes
+// confondues" qui vaille de placer la même pile partout) : classe les distributeurs indépendamment
+// pour chaque catégorie, valeur décroissante en tête (donc en bas de la pile une fois rendu). Le
+// résultat n'est donc plus un ordre unique mais un classement par colonne — à consommer avec des
+// datasets "par rang" plutôt que "par distributeur" (cf. ProductByDistributeurSection en mode
+// conversion).
+//
+// `rawIndexByColumn[i]` = index de la i-ème colonne AFFICHÉE (après tri par sortCategoriesByTotal)
+// dans le tableau `counts` d'origine (indexé, lui, dans l'ordre brut renvoyé par le back) — sans
+// cette traduction, classer "colonne affichée n°i" reviendrait à lire `counts[...][i]`, qui pointe
+// en réalité sur la i-ème catégorie de l'ordre BRUT, pas de l'ordre affiché.
+export function rankDistributeursPerCategory(distributeurs: string[], counts: Record<string, number[]>, rawIndexByColumn: number[]): string[][] {
+  return rawIndexByColumn.map((rawIndex) =>
+    [...distributeurs].sort((a, b) => {
+      const valueA = counts[a]?.[rawIndex] ?? 0;
+      const valueB = counts[b]?.[rawIndex] ?? 0;
+      if (valueB !== valueA) return valueB - valueA;
+      return a.localeCompare(b);
+    }),
+  );
+}
+
 // Ordre des catégories sur l'axe X (statuts, produits, sources) : plus gros total à gauche, plus
 // petit à droite, alphabétique en cas d'égalité — calculé sur les distributeurs actuellement
 // affichés, pas sur le total global, pour que le tri suive le filtre.
@@ -82,6 +119,7 @@ export interface DrilldownEntry {
 export interface Drilldown {
   title: string;
   entries: DrilldownEntry[];
+  formatValue?: (value: number) => string;
 }
 
 function buildDrilldownEntries(distributeurs: string[], counts: Record<string, number[]>, categoryIndex: number, activeDistributeurs: Set<string>): DrilldownEntry[] {
@@ -102,6 +140,7 @@ export function makeCategoryClickHandler(
   titlePrefix: string,
   activeDistributeurs: Set<string>,
   setDrilldown: (drilldown: Drilldown | null) => void,
+  formatValue?: (value: number) => string,
 ) {
   return (event: ChartEvent, _elements: ActiveElement[], chart: ChartJs) => {
     const nativeEvent = event.native;
@@ -112,6 +151,6 @@ export function makeCategoryClickHandler(
     if (!category) return;
     const entries = buildDrilldownEntries(distributeurs, counts, categories.indexOf(category), activeDistributeurs);
     if (entries.length === 0) return;
-    setDrilldown({ title: `${titlePrefix} — ${category}`, entries });
+    setDrilldown({ title: `${titlePrefix} — ${category}`, entries, formatValue });
   };
 }

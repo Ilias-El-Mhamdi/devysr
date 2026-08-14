@@ -21,9 +21,10 @@ type ComparisonSortKey = keyof typeof COMPARISON_METRICS;
 interface DistributeurComparisonSectionProps {
   distributeurs: DistributeurStat[];
   activeDistributeurs: Set<string>;
+  groupLabel?: string;
 }
 
-export function DistributeurComparisonSection({ distributeurs, activeDistributeurs }: DistributeurComparisonSectionProps) {
+export function DistributeurComparisonSection({ distributeurs, activeDistributeurs, groupLabel = 'Distributeur' }: DistributeurComparisonSectionProps) {
   const [sortKey, setSortKey] = useState<ComparisonSortKey>('total');
 
   const sortedDistributeurs = useMemo(() => {
@@ -77,7 +78,7 @@ export function DistributeurComparisonSection({ distributeurs, activeDistributeu
   return (
     <section className="glass-panel glow-violet mt-8 rounded-2xl px-8 py-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h2 className="text-lg font-semibold text-slate-100">Distributeur comparison</h2>
+        <h2 className="text-lg font-semibold text-slate-100">{groupLabel} comparison</h2>
         <div className="flex gap-2 text-xs">
           {(Object.keys(COMPARISON_METRICS) as ComparisonSortKey[]).map((key) => (
             <button
@@ -102,7 +103,7 @@ export function DistributeurComparisonSection({ distributeurs, activeDistributeu
         <table className="w-full min-w-[760px] text-left text-sm">
           <thead>
             <tr className="border-b border-slate-800 text-xs tracking-wide text-slate-500 uppercase">
-              <th className="py-2 pr-4">Distributeur</th>
+              <th className="py-2 pr-4">{groupLabel}</th>
               <th className="py-2 pr-4">Total</th>
               <th className="py-2 pr-4">Active</th>
               <th className="py-2 pr-4">Won</th>

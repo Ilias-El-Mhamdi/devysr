@@ -1,5 +1,6 @@
 import type { LeadRecord } from 'shared/types/lead';
 import type { ProductsByDistributeur, SourceByDistributeur, StatsCount, StatusByDistributeur } from 'shared/types/stats';
+import { isWon } from './leadClassification';
 import { EMPTY_VALUE, STATUS_ORDER } from './shared';
 
 export function countBy(values: string[]): StatsCount[] {
@@ -27,6 +28,40 @@ export function computeProductsByDistributeur(leads: LeadRecord[]): ProductsByDi
     if (productIndex === -1) continue;
     const distributeur = lead.distributeur || 'Unassigned';
     counts[distributeur][productIndex] += 1;
+  }
+
+  return { products, distributeurs, counts };
+}
+
+// Même grille (produits × distributeurs) que computeProductsByDistributeur, mais chaque cellule
+// est le taux de conversion (won / total, en %) plutôt que le volume — pour permettre de basculer
+// le même graphe empilé entre "qui traite le plus" et "qui convertit le mieux", produit par produit.
+export function computeProductConversionByDistributeur(leads: LeadRecord[]): ProductsByDistributeur {
+  const products = [...new Set(leads.map((lead) => lead.valeurs['Product Interest']).filter((value) => value && value !== EMPTY_VALUE))].sort();
+  const distributeurs = [...new Set(leads.map((lead) => lead.distributeur || 'Unassigned'))].sort();
+
+  const totals: Record<string, number[]> = {};
+  const won: Record<string, number[]> = {};
+  for (const distributeur of distributeurs) {
+    totals[distributeur] = products.map(() => 0);
+    won[distributeur] = products.map(() => 0);
+  }
+
+  for (const lead of leads) {
+    const product = lead.valeurs['Product Interest'];
+    if (!product || product === EMPTY_VALUE) continue;
+    const productIndex = products.indexOf(product);
+    if (productIndex === -1) continue;
+    const distributeur = lead.distributeur || 'Unassigned';
+    totals[distributeur][productIndex] += 1;
+    if (isWon(lead.valeurs['Lead Status'])) won[distributeur][productIndex] += 1;
+  }
+
+  const counts: Record<string, number[]> = {};
+  for (const distributeur of distributeurs) {
+    counts[distributeur] = products.map((_, index) =>
+      totals[distributeur][index] > 0 ? Math.round((won[distributeur][index] / totals[distributeur][index]) * 100) : 0,
+    );
   }
 
   return { products, distributeurs, counts };

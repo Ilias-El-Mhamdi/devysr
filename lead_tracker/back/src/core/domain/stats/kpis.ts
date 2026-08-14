@@ -25,7 +25,8 @@ export function computeKpis(leads: LeadRecord[], distributeurs: Distributeur[], 
   }
 
   const closedDurations = [...daysToCloseByLead.values()];
-  const avgDaysToClose = closedDurations.length > 0 ? roundToOneDecimal(closedDurations.reduce((sum, days) => sum + days, 0) / closedDurations.length) : null;
+  const avgDaysToClose =
+    closedDurations.length > 0 ? roundToOneDecimal(closedDurations.reduce((sum, days) => sum + days, 0) / closedDurations.length) : null;
 
   return {
     totalLeads: leads.length,

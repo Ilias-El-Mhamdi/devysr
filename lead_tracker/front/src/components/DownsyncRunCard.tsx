@@ -35,7 +35,7 @@ export function DownsyncRunCard({ run, onDelete }: DownsyncRunCardProps) {
           {run.statut === 'succes' && run.resume && (
             <p className="text-sm text-slate-300">
               {run.resume.nbLeadExportes} leads exported · {run.resume.nbLeadTraites} processed · {run.resume.nbLeadNouveaux} new ·{' '}
-              {run.resume.nbLeadMisAJour} updated · {run.resume.nbDistributeurCrees} distributor(s) created
+              {run.resume.nbLeadMisAJour} updated · {run.resume.nbDistributeurCrees} distributor(s) exported
               {!!run.resume.nbLeadNonAssignes && ` · ${run.resume.nbLeadNonAssignes} unassigned`}
             </p>
           )}

@@ -1,16 +1,22 @@
 import { colorForDistributeur } from './distributeurColors';
 
+export interface FilterGroup {
+  name: string;
+  members: string[];
+}
+
 interface DistributeurFilterProps {
-  distributeurs: string[];
+  groups: FilterGroup[];
+  allDistributeurs: string[];
   selected: Set<string>;
   onChange: (next: Set<string>) => void;
 }
 
-export function DistributeurFilter({ distributeurs, selected, onChange }: DistributeurFilterProps) {
-  const toggle = (name: string) => {
+export function DistributeurFilter({ groups, allDistributeurs, selected, onChange }: DistributeurFilterProps) {
+  const toggleGroup = (members: string[]) => {
+    const allActive = members.every((member) => selected.has(member));
     const next = new Set(selected);
-    if (next.has(name)) next.delete(name);
-    else next.add(name);
+    members.forEach((member) => (allActive ? next.delete(member) : next.add(member)));
     onChange(next);
   };
 
@@ -18,7 +24,7 @@ export function DistributeurFilter({ distributeurs, selected, onChange }: Distri
     <div className="flex flex-wrap items-center gap-2">
       <button
         type="button"
-        onClick={() => onChange(new Set(distributeurs))}
+        onClick={() => onChange(new Set(allDistributeurs))}
         className="cursor-pointer rounded-md border border-slate-700 px-2.5 py-1 text-xs text-slate-300 hover:border-neon-cyan"
       >
         All
@@ -30,13 +36,17 @@ export function DistributeurFilter({ distributeurs, selected, onChange }: Distri
       >
         None
       </button>
-      {distributeurs.map((name) => {
-        const isActive = selected.has(name);
+      {groups.map(({ name, members }) => {
+        // Groupe (zone) actif seulement si TOUS ses distributeurs sont sélectionnés — cohérent avec
+        // le clic, qui active/désactive le groupe entier d'un coup plutôt que de gérer un état
+        // "partiellement sélectionné".
+        const isActive = members.length > 0 && members.every((member) => selected.has(member));
         return (
           <button
             key={name}
             type="button"
-            onClick={() => toggle(name)}
+            onClick={() => toggleGroup(members)}
+            title={members.length > 1 ? members.join(', ') : undefined}
             className="flex cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition"
             style={{
               borderColor: isActive ? colorForDistributeur(name) : 'rgba(148, 163, 184, 0.25)',

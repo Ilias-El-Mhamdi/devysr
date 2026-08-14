@@ -68,7 +68,8 @@ export function computeDistributeurStats(
         createdLast30Days,
         staleLeads,
         lastUpdateDaysAgo: mostRecentUpdate ? roundToOneDecimal((now.getTime() - mostRecentUpdate.getTime()) / MS_PER_DAY) : null,
-        avgDaysToFirstUpdate: updateDurations.length > 0 ? roundToOneDecimal(updateDurations.reduce((sum, days) => sum + days, 0) / updateDurations.length) : null,
+        avgDaysToFirstUpdate:
+          updateDurations.length > 0 ? roundToOneDecimal(updateDurations.reduce((sum, days) => sum + days, 0) / updateDurations.length) : null,
         daysToFirstUpdateCount: updateDurations.length,
       };
     })

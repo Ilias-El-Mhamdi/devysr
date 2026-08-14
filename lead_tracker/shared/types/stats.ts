@@ -49,6 +49,7 @@ export interface ProductsByDistributeur {
   counts: Record<string, number[]>;
 }
 
+
 export interface StatusByDistributeur {
   statuses: string[];
   distributeurs: string[];
@@ -91,7 +92,19 @@ export interface StatsResponse {
   distributeurs: DistributeurStat[];
   trend: StatsTrend;
   productsByDistributeur: ProductsByDistributeur;
+  productConversionByDistributeur: ProductsByDistributeur;
   statusByDistributeur: StatusByDistributeur;
   sourceByDistributeur: SourceByDistributeur;
   stageVelocity: StageVelocity;
+  // Regroupement par zone continentale (cf. back/src/core/domain/stats/region.ts) — mêmes formes que
+  // les champs "ByDistributeur" ci-dessus, mais la clé de groupe est un nom de zone plutôt qu'un nom
+  // de distributeur. `regionByDistributeur` permet au front de traduire une sélection de zones en
+  // ensemble de distributeurs pour le filtre (qui reste toujours exprimé en noms de distributeurs).
+  regionByDistributeur: Record<string, string>;
+  regions: DistributeurStat[];
+  productsByRegion: ProductsByDistributeur;
+  productConversionByRegion: ProductsByDistributeur;
+  statusByRegion: StatusByDistributeur;
+  sourceByRegion: SourceByDistributeur;
+  stageVelocityByRegion: StageVelocity;
 }

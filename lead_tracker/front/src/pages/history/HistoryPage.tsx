@@ -271,7 +271,7 @@ export function HistoryPage() {
                     <>
                       <p className="mt-1 text-sm text-slate-300">
                         {run.resume.nbFichiersLus} file(s) scanned · {run.resume.nbLeadModifies} lead(s) modified ·{' '}
-                        {run.resume.nbDistributeursImpactes} distributor(s) impacted
+                        {run.resume.nbDistributeursImpactes} distributor(s) updated
                         {run.resume.anomalies.length > 0 && ` · ${run.resume.anomalies.length} anomalie(s)`}
                       </p>
                       {run.resume.anomalies.length > 0 && (
@@ -483,7 +483,7 @@ export function HistoryPage() {
                   {run.resume && (
                     <p className="mt-1 text-sm text-slate-300">
                       {run.resume.nbLeadTraites} leads processed · {run.resume.nbLeadNouveaux} new · {run.resume.nbLeadMisAJour} updated ·{' '}
-                      {run.resume.nbDistributeurCrees} distributor(s) created
+                      {run.resume.nbDistributeurCrees} distributor(s) exported
                       {run.resume.nbLeadNonAssignes > 0 && ` · ${run.resume.nbLeadNonAssignes} unassigned`}
                     </p>
                   )}
@@ -522,7 +522,7 @@ export function HistoryPage() {
                   <RunBadge statut={run.statut} dateDebut={run.dateDebut} />
                   {run.resume && (
                     <p className="mt-1 text-sm text-slate-300">
-                      {run.resume.nbLeadEcart} lead(s) out of sync · {run.resume.nbDistributeursImpactes} distributor(s) impacted
+                      {run.resume.nbLeadEcart} lead(s) out of sync · {run.resume.nbDistributeursImpactes} distributor(s) updated
                     </p>
                   )}
                   {run.erreur && <p className="mt-1 text-sm text-neon-red">{run.erreur}</p>}

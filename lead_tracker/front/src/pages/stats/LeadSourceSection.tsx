@@ -11,9 +11,10 @@ interface LeadSourceSectionProps {
   sourceByDistributeur: SourceByDistributeur;
   activeDistributeurs: Set<string>;
   onDrilldown: (drilldown: Drilldown | null) => void;
+  groupLabel?: string;
 }
 
-export function LeadSourceSection({ sourceByDistributeur, activeDistributeurs, onDrilldown }: LeadSourceSectionProps) {
+export function LeadSourceSection({ sourceByDistributeur, activeDistributeurs, onDrilldown, groupLabel = 'distributeur' }: LeadSourceSectionProps) {
   const { sources, counts } = sourceByDistributeur;
 
   const sourceData: ChartData<'bar'> = useMemo(() => {
@@ -37,7 +38,7 @@ export function LeadSourceSection({ sourceByDistributeur, activeDistributeurs, o
     <section className="glass-panel glow-violet mt-8 rounded-2xl px-8 py-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <h2 className="text-lg font-semibold text-slate-100">Lead source</h2>
-        <p className="text-xs text-slate-500">Click a column to zoom into its distributeur breakdown</p>
+        <p className="text-xs text-slate-500">Click a column to zoom into its {groupLabel} breakdown</p>
       </div>
       <div className="mt-4 h-96">
         <Bar
